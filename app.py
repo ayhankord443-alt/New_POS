@@ -306,13 +306,20 @@ def download_pdf():
     conn.close()
     
     font_font_name = 'Helvetica'
-    font_path = "C:\\Windows\\Fonts\\arial.ttf"
-    if os.path.exists(font_path):
-        try:
-            pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
-            font_font_name = 'ArabicFont'
-        except Exception:
-            font_font_name = 'Helvetica'
+    font_paths = [
+        os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'),
+        os.path.join(os.getcwd(), 'Amiri-Regular.ttf'),
+        "C:\\Windows\\Fonts\\arial.ttf"
+    ]
+    
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
+                font_font_name = 'ArabicFont'
+                break
+            except Exception:
+                continue
 
     pdf_filename = "Organic_Juices_Qayma.pdf"
     doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
@@ -369,7 +376,6 @@ def download_pdf():
         categorized_orders[cat].append((item_name, qty, unit))
 
     for cat_name, items in categorized_orders.items():
-        # Add section title in PDF
         sec_title = reshape_text(f"بەش: {cat_name}")
         story.append(Paragraph(f"<b>{sec_title}</b>", cat_header_style))
         story.append(Spacer(1, 4))
