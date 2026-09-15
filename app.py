@@ -1,7 +1,8 @@
 import os
 import sqlite3
 from datetime import datetime
-from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify
+from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -13,6 +14,7 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 
 app = Flask(__name__)
+app.secret_key = 'organic_juices_secret_key_2026'
 
 ALL_ITEMS = {
     "فيقي": [
@@ -44,8 +46,15 @@ ALL_ITEMS = {
 def init_db():
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
+    # Users table
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE,
+                  password TEXT)''')
+    # Orders table updated to include username
     c.execute('''CREATE TABLE IF NOT EXISTS orders
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT,
                   item_name TEXT,
                   quantity REAL,
                   unit TEXT,
@@ -61,6 +70,75 @@ def reshape_text(text):
     reshaped = arabic_reshaper.reshape(str(text))
     return get_display(reshaped)
 
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>چوونەژوورەوە - ئۆرگانیک جویس</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; color: #1a1a1a; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); width: 100%; max-width: 360px; border: 1px solid #e0e0e0; }
+        h2 { color: #1b5e20; margin-bottom: 20px; font-size: 22px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        button { width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        button:hover { background: #1b5e20; }
+        .error { color: #c62828; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
+        .switch { margin-top: 15px; font-size: 14px; color: #666; }
+        .switch a { color: #2e7d32; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>ئۆرگانیک جویس</h2>
+        <p style="color: #555; margin-top: 0; font-size: 14px;">چوونەژوورەوە بۆ سیستەمێ کاشێر</p>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="ناوی بەکارهێنەر (Username)" required>
+            <input type="password" name="password" placeholder="وشەی تێپەڕ (Password)" required>
+            <button type="submit">چوونەژوورەوە</button>
+        </form>
+        <div class="switch">هەژمارت نییە؟ <a href="/register">خۆتۆمارکردن</a></div>
+    </div>
+</body>
+</html>
+"""
+
+REGISTER_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>خۆتۆمارکردن - ئۆرگانیک جویس</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; color: #1a1a1a; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); width: 100%; max-width: 360px; border: 1px solid #e0e0e0; }
+        h2 { color: #1b5e20; margin-bottom: 20px; font-size: 22px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        button { width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        button:hover { background: #1b5e20; }
+        .error { color: #c62828; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
+        .switch { margin-top: 15px; font-size: 14px; color: #666; }
+        .switch a { color: #2e7d32; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>دروستکرنا هەژمارا نوو</h2>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="ناوی بەکارهێنەر (Username)" required>
+            <input type="password" name="password" placeholder="وشەی تێپەڕ (Password)" required>
+            <button type="submit">تۆمارکردن</button>
+        </form>
+        <div class="switch">هەژمارت هەیە؟ <a href="/login">چوونەژوورەوە</a></div>
+    </div>
+</body>
+</html>
+"""
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ku" dir="rtl">
@@ -69,7 +147,6 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>کۆمپانییا ئورگانیک جویس</title>
     
-    <!-- تایبەتمەندیێن PWA بۆ ئایفۆن و موبایلان -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ئۆرگانیک جویس">
@@ -99,15 +176,33 @@ HTML_TEMPLATE = """
         }
 
         .brand-header { 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 25px; 
             padding-bottom: 10px;
             border-bottom: 3px solid #2e7d32;
         }
         .brand-header h1 { 
             margin: 0; 
-            font-size: 26px; 
+            font-size: 22px; 
             font-weight: 900; 
             color: #1b5e20;
+        }
+        .user-panel {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+        .logout-btn {
+            background-color: #c62828;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 12px;
         }
 
         .section-title { 
@@ -191,6 +286,10 @@ HTML_TEMPLATE = """
 <body>
     <div class="brand-header">
         <h1>کۆمپانییا ئورگانیک جویس</h1>
+        <div class="user-panel">
+            <span>👤 <b>{{ username }}</b></span>
+            <a href="/logout" class="logout-btn">چوونەدەروون</a>
+        </div>
     </div>
 
     {% for cat, items in all_items.items() %}
@@ -354,19 +453,76 @@ class NumberedCanvas(canvas.Canvas):
             self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
-def get_orders_list():
+def get_orders_list(username):
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
-    c.execute("SELECT id, item_name, quantity, unit, category FROM orders")
+    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE username = ?", (username,))
     rows = c.fetchall()
     conn.close()
     return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        password = request.form['password']
+        
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("SELECT password FROM users WHERE username = ?", (username,))
+        row = c.fetchone()
+        conn.close()
+        
+        if row and check_password_hash(row[0], password):
+            session['username'] = username
+            return redirect(url_for('index'))
+        else:
+            return render_template_string(LOGIN_TEMPLATE, error="ناوی بەکارهێنەر یان وشەی تێپەڕ هەڵەیە!")
+            
+    return render_template_string(LOGIN_TEMPLATE)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        password = request.form['password']
+        
+        if not username or not password:
+            return render_template_string(REGISTER_TEMPLATE, error="تکایە هەموو خانەیەک پڕ بکە!")
+            
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("SELECT id FROM users WHERE username = ?", (username,))
+        existing = c.fetchone()
+        
+        if existing:
+            conn.close()
+            return render_template_string(REGISTER_TEMPLATE, error="ئەم ناوە پێشتر تۆمارکراوە، ناوەکی دی هەڵبژێرە!")
+            
+        hashed_pw = generate_password_hash(password)
+        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_pw))
+        conn.commit()
+        conn.close()
+        
+        session['username'] = username
+        return redirect(url_for('index'))
+        
+    return render_template_string(REGISTER_TEMPLATE)
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
 def index():
-    raw_orders = get_orders_list()
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
+    username = session['username']
+    raw_orders = get_orders_list(username)
     tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
-    return render_template_string(HTML_TEMPLATE, all_items=ALL_ITEMS, orders=tuple_orders)
+    return render_template_string(HTML_TEMPLATE, all_items=ALL_ITEMS, orders=tuple_orders, username=username)
 
 @app.route('/logo.png')
 def get_logo():
@@ -374,6 +530,10 @@ def get_logo():
 
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
+    if 'username' not in session:
+        return jsonify({"status": "unauthorized"}), 401
+        
+    username = session['username']
     item_name = request.form['item_name']
     unit = request.form['unit']
     category = request.form['category']
@@ -381,50 +541,34 @@ def quick_add_ajax():
     
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
-    c.execute("INSERT INTO orders (item_name, quantity, unit, category) VALUES (?, ?, ?, ?)", 
-              (item_name, quantity, unit, category))
+    c.execute("INSERT INTO orders (username, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
+              (username, item_name, quantity, unit, category))
     conn.commit()
     conn.close()
-    return jsonify({"status": "success", "orders": get_orders_list()})
+    return jsonify({"status": "success", "orders": get_orders_list(username)})
 
 @app.route('/clear_ajax')
 def clear_ajax():
+    if 'username' not in session:
+        return jsonify({"status": "unauthorized"}), 401
+        
+    username = session['username']
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
-    c.execute("DELETE FROM orders")
+    c.execute("DELETE FROM orders WHERE username = ?", (username,))
     conn.commit()
     conn.close()
     return jsonify({"status": "success", "orders": []})
 
-@app.route('/quick_add', methods=['POST'])
-def quick_add():
-    item_name = request.form['item_name']
-    unit = request.form['unit']
-    category = request.form['category']
-    quantity = float(request.form['quantity'])
-    
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO orders (item_name, quantity, unit, category) VALUES (?, ?, ?, ?)", 
-              (item_name, quantity, unit, category))
-    conn.commit()
-    conn.close()
-    return redirect(url_for('index'))
-
-@app.route('/clear')
-def clear():
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM orders")
-    conn.commit()
-    conn.close()
-    return redirect(url_for('index'))
-
 @app.route('/download_pdf')
 def download_pdf():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
+    username = session['username']
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
-    c.execute("SELECT item_name, quantity, unit, category FROM orders")
+    c.execute("SELECT item_name, quantity, unit, category FROM orders WHERE username = ?", (username,))
     rows = c.fetchall()
     conn.close()
     
@@ -445,7 +589,7 @@ def download_pdf():
             except Exception:
                 continue
 
-    pdf_filename = "Organic_Juices_Qayma.pdf"
+    pdf_filename = f"Organic_Juices_Qayma_{username}.pdf"
     doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
     
@@ -489,7 +633,7 @@ def download_pdf():
     
     title_txt = reshape_text("کۆمپانییا ئورگانیک جویس")
     story.append(Paragraph(f"<b>{title_txt}</b>", title_style))
-    story.append(Paragraph(f"Daily Order Report - Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
+    story.append(Paragraph(f"User: {username} | Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
     story.append(Spacer(1, 10))
     
     categorized_orders = {}
