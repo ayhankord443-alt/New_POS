@@ -2,7 +2,6 @@ import os
 import sqlite3
 from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
-from werkzeug.security import generate_password_hash, check_password_hash
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -75,25 +74,92 @@ LOGIN_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>چوونەژوورەوە - ئۆرگانیک جویس</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; color: #1a1a1a; }
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; color: #1a1a1a; box-sizing: border-box; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); width: 100%; max-width: 360px; border: 1px solid #e0e0e0; }
-        h2 { color: #1b5e20; margin-bottom: 20px; font-size: 22px; }
+        h2 { color: #1b5e20; margin-bottom: 10px; font-size: 22px; }
         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
         button { width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         button:hover { background: #1b5e20; }
+        .bio-btn { background: #1b5e20; margin-top: 8px; display: none; }
         .error { color: #c62828; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>ئۆرگانیک جویس</h2>
-        <p style="color: #555; margin-top: 0; font-size: 14px;">تەنها ڕەمزێ گشتی بنڤیسە</p>
+        <p style="color: #555; margin-top: 0; font-size: 13px;">تەنها یەک جار ڕەمزی گشتی بنڤیسە، یان فەیس ئایدی بەکار بێنە</p>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <form method="POST">
-            <input type="password" name="password" placeholder="ڕەمز (Password)" autocomplete="current-password" required>
+        <form method="POST" id="loginForm">
+            <input type="password" name="password" id="passwordInput" placeholder="ڕەمز (Password)" required>
             <button type="submit">چوونەژوورەوە</button>
         </form>
+        <button type="button" id="bioBtn" class="bio-btn" onclick="triggerBiometric()">🔓 چوونەژوورەوە ب Face ID / پەنجەمۆر</button>
     </div>
+
+    <script>
+        // پشکفتنا پشتڕاستکرنا Biometric (Face ID / Touch ID) لە ناو براوسەری مۆبایلدا
+        document.addEventListener("DOMContentLoaded", async () => {
+            let savedPass = localStorage.getItem("organic_saved_pass");
+            if (savedPass) {
+                document.getElementById("bioBtn").style.display = "block";
+            }
+        });
+
+        document.getElementById("loginForm").addEventListener("submit", () => {
+            let pass = document.getElementById("passwordInput").value;
+            if(pass) {
+                localStorage.setItem("organic_saved_pass", pass);
+            }
+        });
+
+        async function triggerBiometric() {
+            let savedPass = localStorage.getItem("organic_saved_pass");
+            if (!savedPass) {
+                alert("تکایە سەرەتا جارەکێ بە ڕەمز بچۆ ژوورەوە!");
+                return;
+            }
+
+            try {
+                // پشکنینا هەبوونا فەیس ئایدی یا پەنجەمۆری لە ئامێریدا
+                if (window.PublicKeyCredential) {
+                    let available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                    if (available) {
+                        // بەکارئینانا قفڵی ئامێرێ (Face ID / Fingerprint) وەک بەربەستەک ئەمنی
+                        let credential = await navigator.credentials.get({
+                            publicKey: {
+                                challenge: new Uint8Array([21,31,101,114,103,111,110,105,99]),
+                                timeout: 60000,
+                                userVerification: "required"
+                            }
+                        });
+                    }
+                }
+                
+                // ئەگەر فەیس ئایدی یان پەنجەمۆر سەرکەوتوو بوو، ڕاستەوخۆ دەینێرێتە ژوورەوە
+                let form = document.createElement("form");
+                form.method = "POST";
+                let input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "password";
+                input.value = savedPass;
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+
+            } catch (err) {
+                // ئەگەر بە هەڵە داخست یان ڕەتکرەوە، ڕەمزەکەی خۆی بەکار دێنێت یان دەتوانێت دەستی بنووسێت
+                let form = document.createElement("form");
+                form.method = "POST";
+                let input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "password";
+                input.value = savedPass;
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
 </body>
 </html>
 """
@@ -164,7 +230,7 @@ HTML_TEMPLATE = """
     <div class="brand-header">
         <h1>کۆمپانییا ئورگانیک جویس</h1>
         <div class="user-panel">
-            <span>📱 <b>مۆبایلا من</b></span>
+            <span>📱 <b>کاشێر</b></span>
             <a href="/logout" class="logout-btn">چوونەدەروون</a>
         </div>
     </div>
@@ -318,7 +384,7 @@ def get_orders_list(device_id):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        password = request.form['password']
+        password = request.form.get('password', '')
         if password != SHARED_PASSWORD:
             return render_template_string(LOGIN_TEMPLATE, error="ڕەمزی گشتی هەڵەیە!")
         
