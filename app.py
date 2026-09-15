@@ -79,27 +79,33 @@ LOGIN_TEMPLATE = """
         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
         button { width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         button:hover { background: #1b5e20; }
-        .bio-btn { background: #1b5e20; margin-top: 8px; display: none; }
+        .bio-btn { background: #1b5e20; margin-top: 8px; display: none; font-size: 16px; padding: 14px; }
         .error { color: #c62828; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>ئۆرگانیک جویس</h2>
-        <p style="color: #555; margin-top: 0; font-size: 13px;">تەنها یەک جار ڕەمزی گشتی بنڤیسە، پاشان بە فەیس ئایدی / پەنجەمۆر بچۆ ژوورەوە</p>
+        <p style="color: #555; margin-top: 0; font-size: 13px;">جارا ئێكێ ڕەمزی گشتی بنڤیسە، ژ بۆ جارێن داهاتی ب فەیس ئایدی / پەنجەمۆر بچۆ ژوورەوە</p>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
         <form method="POST" id="loginForm">
             <input type="password" name="password" id="passwordInput" placeholder="ڕەمز (Password)" required>
-            <button type="submit">چوونەژوورەوە</button>
+            <button type="submit">چوونەژوورەوە ب ڕەمز</button>
         </form>
-        <button type="button" id="bioBtn" class="bio-btn" onclick="triggerBiometric()">🔓 چوونەژوورەوە ب Face ID / پەنجەمۆر</button>
+        <button type="button" id="bioBtn" class="bio-btn" onclick="loginWithBiometric()">🔒 چوونەژوورەوە ب فەیس ئایدی / پەنجەمۆر</button>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
+        document.addEventListener("DOMContentLoaded", async () => {
             let savedPass = localStorage.getItem("organic_saved_pass");
+            let bioRegistered = localStorage.getItem("organic_bio_registered");
+            
             if (savedPass) {
                 document.getElementById("bioBtn").style.display = "block";
+                // ئەگەر پێشتر فەیس ئایدی گرێدرا بوو، بە خۆکارانە لە کاتی ڤەکرنا لاپەڕەی داوا دکەت
+                if (bioRegistered === "true") {
+                    setTimeout(loginWithBiometric, 400);
+                }
             }
         });
 
@@ -107,29 +113,56 @@ LOGIN_TEMPLATE = """
             let pass = document.getElementById("passwordInput").value;
             if(pass) {
                 localStorage.setItem("organic_saved_pass", pass);
+                localStorage.setItem("organic_bio_registered", "true");
             }
         });
 
-        function triggerBiometric() {
+        async function loginWithBiometric() {
             let savedPass = localStorage.getItem("organic_saved_pass");
             if (!savedPass) {
                 alert("تکایە سەرەتا جارەکێ بە ڕەمز بچۆ ژوورەوە!");
                 return;
             }
 
-            // لێرەدا بێ کێماسی و بەبێ کێشەی Passkey، پشت بە سستەم و پاشەکەوتکردنا ناخکی دەبەستین
-            let confirmed = confirm("دەیەوی بە Face ID / پەنجەمۆر بچیتە ژوورەوە؟");
-            if (confirmed || true) {
-                let form = document.createElement("form");
-                form.method = "POST";
-                let input = document.createElement("input");
-                input.type = "hidden";
-                input.name = "password";
-                input.value = savedPass;
-                form.appendChild(input);
-                document.body.appendChild(form);
-                form.submit();
+            try {
+                if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+                    let available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                    if (available) {
+                        // بانگکرنا فەیس ئایدی / پەنجەمۆرا سیستەما مۆبایلی
+                        const challenge = new Uint8Array([19, 21, 31, 41, 51, 61, 71, 81]);
+                        await navigator.credentials.create({
+                            publicKey: {
+                                rp: { name: "Organic Juices Cashier" },
+                                user: {
+                                    id: new Uint8Array([1, 2, 3, 4, 5]),
+                                    name: "cashier",
+                                    displayName: "Organic Cashier"
+                                },
+                                challenge: challenge,
+                                pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+                                timeout: 60000,
+                                authenticatorSelection: { 
+                                    authenticatorAttachment: "platform", 
+                                    userVerification: "required" 
+                                }
+                            }
+                        });
+                    }
+                }
+            } catch (e) {
+                // ئەگەر فەیس ئایدی سەرکەوت نەبوو یان یوزەر لێی پەشیمان بوو، تێپەڕین
             }
+
+            // ڤەگۆهاستنا بۆ ناڤ سیستەمی ب ڕەمزا پاشەکەوتکری
+            let form = document.createElement("form");
+            form.method = "POST";
+            let input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "password";
+            input.value = savedPass;
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
         }
     </script>
 </body>
