@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from datetime import datetime
-from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory
+from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -66,8 +66,15 @@ HTML_TEMPLATE = """
 <html lang="ku" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>کۆمپانییا ئورگانیک جویس</title>
+    
+    <!-- تایبەتمەندیێن PWA بۆ ئایفۆن و موبایلان -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ئۆرگانیک جویس">
+    <link rel="apple-touch-icon" href="/logo.png">
+
     <style>
         body { 
             font-family: system-ui, -apple-system, sans-serif; 
@@ -143,6 +150,7 @@ HTML_TEMPLATE = """
             font-size: 12px; 
             cursor: pointer; 
         }
+        .btn-add.added { background: #388e3c; transform: scale(0.96); }
         .order-summary { 
             background: #ffffff; 
             border-radius: 10px; 
@@ -194,7 +202,7 @@ HTML_TEMPLATE = """
                     <div class="item-name">{{ item_name }}</div>
                     <div class="unit-tag">({{ unit }})</div>
                 </div>
-                <form action="/quick_add" method="POST" class="btn-group">
+                <form onsubmit="quickAddAjax(event, this)" class="btn-group">
                     <input type="hidden" name="item_name" value="{{ item_name }}">
                     <input type="hidden" name="unit" value="{{ unit }}">
                     <input type="hidden" name="category" value="{{ cat }}">
@@ -206,29 +214,113 @@ HTML_TEMPLATE = """
         </div>
     {% endfor %}
 
-    {% if orders %}
-    <div class="order-summary">
+    <div class="order-summary" id="orderSummaryContainer" style="display: {% if orders %}block{% else %}none{% endif %};">
         <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری:</h3>
-        <table>
-            <tr>
-                <th>بەش</th>
-                <th>بابەت</th>
-                <th>بڕ</th>
-                <th>یەکە</th>
-            </tr>
-            {% for item in orders %}
-            <tr>
-                <td>{{ item[4] }}</td>
-                <td><b>{{ item[1] }}</b></td>
-                <td>{{ item[2] }}</td>
-                <td>{{ item[3] }}</td>
-            </tr>
-            {% endfor %}
+        <table id="ordersTable">
+            <thead>
+                <tr>
+                    <th>بەش</th>
+                    <th>بابەت</th>
+                    <th>بڕ</th>
+                    <th>یەکە</th>
+                </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+                {% for item in orders %}
+                <tr>
+                    <td>{{ item[4] }}</td>
+                    <td><b>{{ item[1] }}</b></td>
+                    <td>{{ item[2] }}</td>
+                    <td>{{ item[3] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
-        <a href="/download_pdf"><button class="pdf-btn">📄 چێکرن و داگرتنا فایلا PDF</button></a>
-        <a href="/clear"><button class="clear-btn">🗑️ پاککرنا قایمەی</button></a>
+        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF</button>
+        <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
-    {% endif %}
+
+    <script>
+        async function quickAddAjax(event, form) {
+            event.preventDefault();
+            let formData = new FormData(form);
+            let btn = form.querySelector('.btn-add');
+            
+            try {
+                let response = await fetch('/quick_add_ajax', {
+                    method: 'POST',
+                    body: formData
+                });
+                let data = await response.json();
+                
+                if (data.status === 'success') {
+                    updateOrdersTable(data.orders);
+                    btn.classList.add('added');
+                    setTimeout(() => btn.classList.remove('added'), 300);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function clearOrdersAjax() {
+            try {
+                let response = await fetch('/clear_ajax');
+                let data = await response.json();
+                if (data.status === 'success') {
+                    updateOrdersTable([]);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function updateOrdersTable(orders) {
+            let container = document.getElementById('orderSummaryContainer');
+            let tbody = document.getElementById('ordersTableBody');
+            
+            if (orders.length === 0) {
+                container.style.display = 'none';
+                tbody.innerHTML = '';
+                return;
+            }
+            
+            container.style.display = 'block';
+            tbody.innerHTML = orders.map(item => `
+                <tr>
+                    <td>${item.category}</td>
+                    <td><b>${item.item_name}</b></td>
+                    <td>${item.quantity}</td>
+                    <td>${item.unit}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function shareInvoicePDF() {
+            try {
+                let response = await fetch('/download_pdf');
+                let blob = await response.blob();
+                let file = new File([blob], "Organic_Juices_Qayma.pdf", { type: "application/pdf" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'پسولتا فرۆتنێ',
+                        text: 'فەرموو پسولتا تە یا ئۆرگانیک جویس',
+                        files: [file],
+                    });
+                } else {
+                    let url = URL.createObjectURL(blob);
+                    let a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Organic_Juices_Qayma.pdf';
+                    a.click();
+                }
+            } catch (error) {
+                console.log('هەڵە لە شێرکرنێ دا:', error);
+                window.location.href = '/download_pdf';
+            }
+        }
+    </script>
 </body>
 </html>
 """
@@ -262,18 +354,47 @@ class NumberedCanvas(canvas.Canvas):
             self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
-@app.route('/')
-def index():
+def get_orders_list():
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
-    c.execute("SELECT * FROM orders")
-    orders = c.fetchall()
+    c.execute("SELECT id, item_name, quantity, unit, category FROM orders")
+    rows = c.fetchall()
     conn.close()
-    return render_template_string(HTML_TEMPLATE, all_items=ALL_ITEMS, orders=orders)
+    return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
+
+@app.route('/')
+def index():
+    raw_orders = get_orders_list()
+    tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
+    return render_template_string(HTML_TEMPLATE, all_items=ALL_ITEMS, orders=tuple_orders)
 
 @app.route('/logo.png')
 def get_logo():
     return send_from_directory(os.getcwd(), 'logo.png')
+
+@app.route('/quick_add_ajax', methods=['POST'])
+def quick_add_ajax():
+    item_name = request.form['item_name']
+    unit = request.form['unit']
+    category = request.form['category']
+    quantity = float(request.form['quantity'])
+    
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO orders (item_name, quantity, unit, category) VALUES (?, ?, ?, ?)", 
+              (item_name, quantity, unit, category))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success", "orders": get_orders_list()})
+
+@app.route('/clear_ajax')
+def clear_ajax():
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM orders")
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success", "orders": []})
 
 @app.route('/quick_add', methods=['POST'])
 def quick_add():
@@ -415,4 +536,5 @@ def download_pdf():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
