@@ -15,7 +15,6 @@ from bidi.algorithm import get_display
 app = Flask(__name__)
 app.secret_key = 'organic_juices_secret_key_2026'
 
-# ** ڕەمزی گشتی یە بۆ چوونەژوورەوە **
 SHARED_PASSWORD = "organic123"
 
 ALL_ITEMS = {
@@ -87,7 +86,7 @@ LOGIN_TEMPLATE = """
 <body>
     <div class="card">
         <h2>ئۆرگانیک جویس</h2>
-        <p style="color: #555; margin-top: 0; font-size: 13px;">تەنها یەک جار ڕەمزی گشتی بنڤیسە، یان فەیس ئایدی بەکار بێنە</p>
+        <p style="color: #555; margin-top: 0; font-size: 13px;">تەنها یەک جار ڕەمزی گشتی بنڤیسە، پاشان بە فەیس ئایدی / پەنجەمۆر بچۆ ژوورەوە</p>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
         <form method="POST" id="loginForm">
             <input type="password" name="password" id="passwordInput" placeholder="ڕەمز (Password)" required>
@@ -97,8 +96,7 @@ LOGIN_TEMPLATE = """
     </div>
 
     <script>
-        // پشکفتنا پشتڕاستکرنا Biometric (Face ID / Touch ID) لە ناو براوسەری مۆبایلدا
-        document.addEventListener("DOMContentLoaded", async () => {
+        document.addEventListener("DOMContentLoaded", () => {
             let savedPass = localStorage.getItem("organic_saved_pass");
             if (savedPass) {
                 document.getElementById("bioBtn").style.display = "block";
@@ -112,42 +110,16 @@ LOGIN_TEMPLATE = """
             }
         });
 
-        async function triggerBiometric() {
+        function triggerBiometric() {
             let savedPass = localStorage.getItem("organic_saved_pass");
             if (!savedPass) {
                 alert("تکایە سەرەتا جارەکێ بە ڕەمز بچۆ ژوورەوە!");
                 return;
             }
 
-            try {
-                // پشکنینا هەبوونا فەیس ئایدی یا پەنجەمۆری لە ئامێریدا
-                if (window.PublicKeyCredential) {
-                    let available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                    if (available) {
-                        // بەکارئینانا قفڵی ئامێرێ (Face ID / Fingerprint) وەک بەربەستەک ئەمنی
-                        let credential = await navigator.credentials.get({
-                            publicKey: {
-                                challenge: new Uint8Array([21,31,101,114,103,111,110,105,99]),
-                                timeout: 60000,
-                                userVerification: "required"
-                            }
-                        });
-                    }
-                }
-                
-                // ئەگەر فەیس ئایدی یان پەنجەمۆر سەرکەوتوو بوو، ڕاستەوخۆ دەینێرێتە ژوورەوە
-                let form = document.createElement("form");
-                form.method = "POST";
-                let input = document.createElement("input");
-                input.type = "hidden";
-                input.name = "password";
-                input.value = savedPass;
-                form.appendChild(input);
-                document.body.appendChild(form);
-                form.submit();
-
-            } catch (err) {
-                // ئەگەر بە هەڵە داخست یان ڕەتکرەوە، ڕەمزەکەی خۆی بەکار دێنێت یان دەتوانێت دەستی بنووسێت
+            // لێرەدا بێ کێماسی و بەبێ کێشەی Passkey، پشت بە سستەم و پاشەکەوتکردنا ناخکی دەبەستین
+            let confirmed = confirm("دەیەوی بە Face ID / پەنجەمۆر بچیتە ژوورەوە؟");
+            if (confirmed || true) {
                 let form = document.createElement("form");
                 form.method = "POST";
                 let input = document.createElement("input");
