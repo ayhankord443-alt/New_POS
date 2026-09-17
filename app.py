@@ -519,24 +519,25 @@ def download_pdf():
                 except: pass
 
         pdf_filename = "Organic_Juices_Qayma.pdf"
-        doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
+        doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=10, leftMargin=10, topMargin=15, bottomMargin=15)
         story = []
         styles = getSampleStyleSheet()
         
-        title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
-        subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#33691e'))
-        note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_name, textColor=colors.HexColor('#b71c1c'))
-        header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
+        title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=16, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
+        subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=9, fontName=font_name, textColor=colors.HexColor('#33691e'))
+        note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=9, fontName=font_name, textColor=colors.HexColor('#b71c1c'))
+        header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=9, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
         
         story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
         story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
         
         if user_note:
-            story.append(Spacer(1, 6))
+            story.append(Spacer(1, 4))
             story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
             
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 8))
         
+        # 3 Columns strictly defined
         categories = ["فێقی", "مەعمەل", "مەغزەن"]
         table_headers = [Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style) for cat in categories]
         max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
@@ -548,19 +549,29 @@ def download_pdf():
                 items_in_cat = items_dict.get(cat, [])
                 if i < len(items_in_cat):
                     item_name, unit = items_in_cat[i]
-                    name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=8, alignment=2))
-                    unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=7, alignment=0))
+                    name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=7.5, alignment=2))
+                    unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=6.5, alignment=0))
                     
-                    cell_table = Table([[name_para, unit_para]], colWidths=[120, 60])
+                    cell_table = Table([[name_para, unit_para]], colWidths=[110, 45])
                     cell_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
                     row.append(cell_table)
                 else:
                     row.append(Paragraph("", header_cell_style))
             table_data.append(row)
             
-        col_width = 560 / 3
+        # Total printable width on A4 with 10mm margins is ~575pt -> Divided into 3 equal columns (~191.6 each)
+        col_width = 575 / 3
         t = Table(table_data, colWidths=[col_width, col_width, col_width])
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0,0), (-1,-1), 2), ('TOPPADDING', (0,0), (-1,-1), 2), ('LEFTPADDING', (0,0), (-1,-1), 2), ('RIGHTPADDING', (0,0), (-1,-1), 2)]))
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), 
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'), 
+            ('VALIGN', (0,0), (-1,-1), 'TOP'), 
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), 
+            ('BOTTOMPADDING', (0,0), (-1,-1), 1.5), 
+            ('TOPPADDING', (0,0), (-1,-1), 1.5), 
+            ('LEFTPADDING', (0,0), (-1,-1), 1), 
+            ('RIGHTPADDING', (0,0), (-1,-1), 1)
+        ]))
         
         story.append(t)
         doc.build(story, canvasmaker=WatermarkCanvas)
