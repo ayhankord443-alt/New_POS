@@ -1,567 +1,2605 @@
 import os
 import sqlite3
+import secrets
 from datetime import datetime
-from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
+from flask import (
+    Flask, render_template_string, request, send_file,
+    redirect, url_for, jsonify, session
+)
+
+# =========================================================
+# ORGANIC JUICES - PROFESSIONAL QAYMA SYSTEM
+# =========================================================
 
 app = Flask(__name__)
-app.secret_key = 'organic_juices_secret_key_2026'
 
-SHARED_PASSWORD = "organic123"
+# لە production ـدا ئەمە لە ENV دابنێ
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "organic_juices_secret_key_2026"
+)
+
+DB_NAME = "clean_qayma.db"
+SHARED_PASSWORD = os.environ.get("ORGANIC_PASSWORD", "organic123")
+
+
+# =========================================================
+# DATABASE
+# =========================================================
+
+def get_db():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
+
 
 def init_db():
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS orders
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      device_id TEXT,
-                      item_name TEXT,
-                      quantity REAL,
-                      unit TEXT,
-                      category TEXT)''')
-        
-        c.execute('''CREATE TABLE IF NOT EXISTS items
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      category TEXT,
-                      item_name TEXT,
-                      unit TEXT)''')
-                      
-        c.execute('''CREATE TABLE IF NOT EXISTS notes
-                     (device_id TEXT PRIMARY KEY,
-                      note_text TEXT)''')
-        
-        c.execute("SELECT COUNT(*) FROM items")
-        if c.fetchone()[0] == 0:
-            default_items = [
-                ("فێقی", "نافوكادو", "کیلو"), ("فێقی", "مانكو", "کیلو"), ("فێقی", "موز", "کارتۆن"), 
-                ("فێقی", "برتقال", "کیلو"), ("فێقی", "سف", "دانە"), ("فێقی", "ليمون", "کیلو"), 
-                ("فێقی", "جويزر", "کیلو"), ("فێقی", "جويز هند", "دانە"), ("فێقی", "هنار", "کیلو"), 
-                ("فێقی", "انه ناس", "لبان"), ("فێقی", "خوخ", "کیلو"), ("فێقی", "شاتو", "کیلو"), 
-                ("فێقی", "فه صب", "دانە"), ("فێقی", "سندی", "کیلو"), ("فێقی", "كوندور", "کیلو"), 
-                ("فێقی", "شوتی", "کیلو"), ("فێقی", "فراولا", "کیلو"), ("فێقی", "كیفی", "کیلو"), 
-                ("فێقی", "كاكی", "کیلو"), ("فێقی", "هیزیر", "کیلو"), ("فێقی", "هرميك", "کیلو"),
-                
-                ("مەعمەل", "خوخ", "کیلو"), ("مەعمەل", "مانكو", "کیلو"), ("مەعمەل", "شاتو", "کیلو"), 
-                ("مەعمەل", "انه ناس", "لبان"), ("مەعمەل", "شيرلوكو", "دانە"), ("مەعمەل", "بابه t + ii cm", "دانە"), 
-                ("مەعمەل", "تمرهندی مزن", "دانە"), ("مەعمەل", "تمرهندی بجيك", "دانە"), ("مەعمەل", "مویش مزن", "کیلو"), 
-                ("مەعمەل", "مویش بجيك", "کیلو"), ("مەعمەل", "به فر", "دانە"), ("مەعمەل", "ئاف", "دانە"), 
-                ("مەعمەل", "عصير حليك", "دانە"), ("مەعمەل", "عصير زنجبيل+مانكو", "دانە"), ("مەعمەل", "کرينجوس", "دانە"), 
-                ("مەعمەل", "باقركه ری بيستی", "دانە"), ("مەعمەل", "دزهو کردن", "دانە"),
-                
-                ("مەغزەن", "كلاس+قباغ", "دانە"), ("مەغزەن", "بطل مزن+قباغ", "دانە"), ("مەغزەن", "بطل بجيك+قباغ", "دانە"),
-                ("مەغزەن", "قصاب", "دانە"), ("مەغزەن", "كلينيس", "دانە"), ("مەغزەن", "بوكس (۲)", "دانە"), 
-                ("مەغزەن", "بوكس (٤)", "دانە"), ("مەغزەن", "بوكس (٦)", "دانە"), ("مەغزەن", "علاكه لوكو", "دانە"), 
-                ("مەغزەن", "علاكه زلال", "دانە"), ("مەغزەن", "زاهی", "دانە"), ("مەغزەن", "كليت", "دانە"), 
-                ("مەغزەن", "باس باس", "کیلو"), ("مەغزەن", "باته", "کیلو"), ("مەغزەن", "مساحه", "دانە"), 
-                ("مەغزەن", "فرجه", "دانە"), ("مەغزەن", "دسكورك", "دانە"), ("مەغزەن", "وره فه كاشير", "دانە"), 
-                ("مەغزەن", "بوكس فواكه", "دانە"), ("مەغزەن", "جتل", "دانە"), ("مەغزەن", "قباغ", "دانە"), 
-                ("مەغزەن", "كلاس تيست", "دانە"), ("مەغزەن", "جامسی", "دانە"), ("مەغزەن", "معتر جو", "دانە"), 
-                ("مەغزەن", "خارنا بالندا", "دانە")
-            ]
-            c.executemany("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", default_items)
-            conn.commit()
-        conn.close()
-    except Exception as e:
-        print("DB Error:", e)
+    conn = get_db()
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT NOT NULL,
+            item_name TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            unit TEXT NOT NULL,
+            category TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL,
+            item_name TEXT NOT NULL,
+            unit TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            device_id TEXT PRIMARY KEY,
+            note_text TEXT DEFAULT ''
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    """)
+
+    # -----------------------------------------------------
+    # Categories
+    # -----------------------------------------------------
+
+    categories = ["فێقی", "مەعمەل", "مەغزەن"]
+
+    for cat in categories:
+        c.execute(
+            "INSERT OR IGNORE INTO categories (name) VALUES (?)",
+            (cat,)
+        )
+
+    # -----------------------------------------------------
+    # Default Items
+    # -----------------------------------------------------
+
+    c.execute("SELECT COUNT(*) FROM items")
+
+    if c.fetchone()[0] == 0:
+
+        default_items = [
+
+            # =========================
+            # فێقی
+            # =========================
+
+            ("فێقی", "نافوكادو", "کیلو"),
+            ("فێقی", "مانكو", "کیلو"),
+            ("فێقی", "موز", "کارتۆن"),
+            ("فێقی", "برتقال", "کیلو"),
+            ("فێقی", "سف", "دانە"),
+            ("فێقی", "ليمون", "کیلو"),
+            ("فێقی", "جويزر", "کیلو"),
+            ("فێقی", "جويز هند", "دانە"),
+            ("فێقی", "هنار", "کیلو"),
+            ("فێقی", "انه ناس", "لبان"),
+            ("فێقی", "خوخ", "کیلو"),
+            ("فێقی", "شاتو", "کیلو"),
+            ("فێقی", "فه صب", "دانە"),
+            ("فێقی", "سندی", "کیلو"),
+            ("فێقی", "كوندور", "کیلو"),
+            ("فێقی", "شوتی", "کیلو"),
+            ("فێقی", "فراولا", "کیلو"),
+            ("فێقی", "كیفی", "کیلو"),
+            ("فێقی", "كاكی", "کیلو"),
+            ("فێقی", "هیزیر", "کیلو"),
+            ("فێقی", "هرميك", "کیلو"),
+
+            # =========================
+            # مەعمەل
+            # =========================
+
+            ("مەعمەل", "خوخ", "کیلو"),
+            ("مەعمەل", "مانكو", "کیلو"),
+            ("مەعمەل", "شاتو", "کیلو"),
+            ("مەعمەل", "انه ناس", "لبان"),
+            ("مەعمەل", "شيرلوكو", "دانە"),
+            ("مەعمەل", "بابه t + ii cm", "دانە"),
+            ("مەعمەل", "تمرهندی مزن", "دانە"),
+            ("مەعمەل", "تمرهندی بجيك", "دانە"),
+            ("مەعمەل", "مویش مزن", "کیلو"),
+            ("مەعمەل", "مویش بجيك", "کیلو"),
+            ("مەعمەل", "به فر", "دانە"),
+            ("مەعمەل", "ئاف", "دانە"),
+            ("مەعمەل", "عصير حليك", "دانە"),
+            ("مەعمەل", "عصير زنجبيل+مانكو", "دانە"),
+            ("مەعمەل", "کرينجوس", "دانە"),
+            ("مەعمەل", "باقركه ری بيستی", "دانە"),
+            ("مەعمەل", "دزهو کردن", "دانە"),
+
+            # =========================
+            # مەغزەن
+            # =========================
+
+            ("مەغزەن", "كلاس+قباغ", "دانە"),
+            ("مەغزەن", "بطل مزن+قباغ", "دانە"),
+            ("مەغزەن", "بطل بجيك+قباغ", "دانە"),
+            ("مەغزەن", "قصاب", "دانە"),
+            ("مەغزەن", "كلينيس", "دانە"),
+            ("مەغزەن", "بوكس (۲)", "دانە"),
+            ("مەغزەن", "بوكس (٤)", "دانە"),
+            ("مەغزەن", "بوكس (٦)", "دانە"),
+            ("مەغزەن", "علاكه لوكو", "دانە"),
+            ("مەغزەن", "علاكه زلال", "دانە"),
+            ("مەغزەن", "زاهی", "دانە"),
+            ("مەغزەن", "كليت", "دانە"),
+            ("مەغزەن", "باس باس", "کیلو"),
+            ("مەغزەن", "باته", "کیلو"),
+            ("مەغزەن", "مساحه", "دانە"),
+            ("مەغزەن", "فرجه", "دانە"),
+            ("مەغزەن", "دسكورك", "دانە"),
+            ("مەغزەن", "وره فه كاشير", "دانە"),
+            ("مەغزەن", "بوكس فواكه", "دانە"),
+            ("مەغزەن", "جتل", "دانە"),
+            ("مەغزەن", "قباغ", "دانە"),
+            ("مەغزەن", "كلاس تيست", "دانە"),
+            ("مەغزەن", "جامسی", "دانە"),
+            ("مەغزەن", "معتر جو", "دانە"),
+            ("مەغزەن", "خارنا بالندا", "دانە"),
+        ]
+
+        c.executemany("""
+            INSERT INTO items
+            (category, item_name, unit)
+            VALUES (?, ?, ?)
+        """, default_items)
+
+    conn.commit()
+    conn.close()
+
 
 init_db()
 
-def get_all_items_dict():
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("SELECT category, item_name, unit FROM items")
-        rows = c.fetchall()
-        conn.close()
-        
-        items_dict = {}
-        for cat, name, unit in rows:
-            if cat not in items_dict:
-                items_dict[cat] = []
-            items_dict[cat].append((name, unit))
-        return items_dict
-    except:
-        return {}
 
-def reshape_text(text):
-    if not text:
-        return ""
-    try:
-        import arabic_reshaper
-        from bidi.algorithm import get_display
-        reshaped = arabic_reshaper.reshape(str(text))
-        return get_display(reshaped)
-    except:
-        return str(text)
-
-LOGIN_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ku" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>چوونەژوورەوە - ئۆرگانیک جویس</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; color: #1a1a1a; box-sizing: border-box; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); width: 100%; max-width: 360px; border: 1px solid #e0e0e0; }
-        h2 { color: #1b5e20; margin-bottom: 10px; font-size: 22px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
-        button { width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        button:hover { background: #1b5e20; }
-        .error { color: #c62828; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>ئۆرگانیک جویس</h2>
-        <p style="color: #555; margin-top: 0; font-size: 13px;">ڕەمزی گشتی بنڤیسە دا بچی ژوورەوە</p>
-        {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <form method="POST">
-            <input type="password" name="password" placeholder="ڕەمز (Password)" required>
-            <button type="submit">چوونەژوورەوە</button>
-        </form>
-    </div>
-</body>
-</html>
-"""
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ku" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>کۆمپانییا ئورگانیک جویس</title>
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ئۆرگانیک جویس">
-    <link rel="apple-touch-icon" href="/logo.png">
-
-    <style>
-        body { 
-            font-family: system-ui, -apple-system, sans-serif; 
-            background-color: #ffffff; 
-            margin: 0; 
-            padding: 15px; 
-            text-align: center; 
-            color: #1a1a1a;
-            position: relative;
-        }
-        body::before {
-            content: "";
-            background-image: url('/logo.png');
-            background-repeat: no-repeat;
-            background-position: center 180px;
-            background-size: 260px;
-            opacity: 0.12;
-            position: fixed;
-            top: 0; left: 0; bottom: 0; right: 0;
-            z-index: -1;
-            pointer-events: none;
-        }
-        .brand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; border-bottom: 3px solid #2e7d32; background: rgba(255,255,255,0.9); border-radius: 8px; }
-        .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
-        .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-        .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
-        .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
-        .note-box { background: rgba(249, 251, 231, 0.95); border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
-        .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
-        .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
-        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding: 4px 5px; background: rgba(255,255,255,0.8); border-radius: 4px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .item-card { background: rgba(255,255,255,0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
-        .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
-        .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
-        .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
-        .qty-btn { background: #e0e0e0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; color: #333; }
-        .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
-        .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
-        .order-summary { background: rgba(255,255,255,0.98); border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
-        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
-        .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; font-size: 13px; }
-        th { background-color: #f5f5f5; color: #2e7d32; }
-    </style>
-</head>
-<body>
-    <div class="brand-header">
-        <h1>کۆمپانییا ئورگانیک جویس</h1>
-        <div class="user-panel">
-            <a href="/settings" class="nav-link">⚙️ سێتینگ</a>
-            <a href="/logout" class="logout-btn">چوونەدەروون</a>
-        </div>
-    </div>
-
-    <div class="note-box">
-        <label style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی:</label>
-        <textarea id="noteInput">{{ current_note }}</textarea>
-        <button type="button" class="note-save-btn" onclick="saveNote()">تومارکرنا تێبینیێ</button>
-    </div>
-
-    {% for cat, items in all_items.items() %}
-        <div class="section-title">🔸 {{ cat }}</div>
-        <div class="grid">
-            {% for item_name, unit in items %}
-            <div class="item-card">
-                <div>
-                    <div class="item-name">{{ item_name }}</div>
-                    <div class="unit-tag">({{ unit }})</div>
-                </div>
-                <form onsubmit="quickAddAjax(event, this)" class="btn-group">
-                    <input type="hidden" name="item_name" value="{{ item_name }}">
-                    <input type="hidden" name="unit" value="{{ unit }}">
-                    <input type="hidden" name="category" value="{{ cat }}">
-                    <button type="button" class="qty-btn" onclick="adjustQty(this, -1)">-</button>
-                    <input type="number" name="quantity" value="1" step="any" class="qty-input">
-                    <button type="button" class="qty-btn" onclick="adjustQty(this, 1)">+</button>
-                    <button type="submit" class="btn-add">زێدەکه</button>
-                </form>
-            </div>
-            {% endfor %}
-        </div>
-    {% endfor %}
-
-    <div class="order-summary" id="orderSummaryContainer" style="display: {% if orders %}block{% else %}none{% endif %};">
-        <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری:</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>بەش</th>
-                    <th>بابەت</th>
-                    <th>بڕ</th>
-                    <th>یەکە</th>
-                </tr>
-            </thead>
-            <tbody id="ordersTableBody">
-                {% for item in orders %}
-                <tr>
-                    <td>{{ item[4] }}</td>
-                    <td><b>{{ item[1] }}</b></td>
-                    <td>{{ item[2] }}</td>
-                    <td>{{ item[3] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 داگرتنا PDF</button>
-        <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
-    </div>
-
-    <script>
-        function adjustQty(btn, amount) {
-            let input = btn.parentElement.querySelector('.qty-input');
-            let val = parseFloat(input.value) || 1;
-            input.value = Math.max(0.1, val + amount);
-        }
-        async function saveNote() {
-            let note = document.getElementById('noteInput').value;
-            let fd = new FormData(); fd.append('note', note);
-            await fetch('/save_note', { method: 'POST', body: fd });
-            alert('تێبینی هاتە تومارکرن!');
-        }
-        async function quickAddAjax(e, form) {
-            e.preventDefault();
-            let res = await fetch('/quick_add_ajax', { method: 'POST', body: new FormData(form) });
-            let data = await res.json();
-            if(data.status === 'success') updateOrdersTable(data.orders);
-        }
-        async function clearOrdersAjax() {
-            let res = await fetch('/clear_ajax');
-            let data = await res.json();
-            if(data.status === 'success') updateOrdersTable([]);
-        }
-        function updateOrdersTable(orders) {
-            let container = document.getElementById('orderSummaryContainer');
-            let tbody = document.getElementById('ordersTableBody');
-            if (orders.length === 0) { container.style.display = 'none'; tbody.innerHTML = ''; return; }
-            container.style.display = 'block';
-            tbody.innerHTML = orders.map(i => `<tr><td>${i.category}</td><td><b>${i.item_name}</b></td><td>${i.quantity}</td><td>${i.unit}</td></tr>`).join('');
-        }
-        async function shareInvoicePDF() {
-            window.location.href = '/download_pdf';
-        }
-    </script>
-</body>
-</html>
-"""
-
-SETTINGS_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ku" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>سێتینگ</title>
-    <style>
-        body { font-family: system-ui; background: #f7f9f6; padding: 15px; direction: rtl; text-align: right; }
-        .header { display: flex; justify-content: space-between; background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        input, select { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; }
-        button { background: #2e7d32; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; width: 100%; cursor: pointer; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: right; }
-        th { background: #f5f5f5; color: #2e7d32; }
-        .del-btn { background: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h2 style="margin:0; color:#1b5e20;">⚙️ سێتینگ</h2>
-        <a href="/" style="background:#2e7d32; color:white; padding:8px 15px; border-radius:6px; text-decoration:none;">⬅️ ڤەڕەقین</a>
-    </div>
-    <div class="card">
-        <h3>➕ زێدەکرنا بابەتەکێ نوو</h3>
-        <form method="POST" action="/add_item_setting">
-            <label>بەش:</label>
-            <select name="category"><option value="فێقی">فێقی</option><option value="مەعمەل">مەعمەل</option><option value="مەغزەن">مەغزەن</option></select>
-            <label>ناڤێ بابەتی:</label><input type="text" name="item_name" required>
-            <label>یەکە:</label><input type="text" name="unit" required>
-            <button type="submit">تومارکرن</button>
-        </form>
-    </div>
-    <div class="card">
-        <h3>📋 لیستەیا بابەتان</h3>
-        <table>
-            <tr><th>بەش</th><th>ناڤ</th><th>یەکە</th><th>کردار</th></tr>
-            {% for item in all_items_list %}
-            <tr><td>{{ item[1] }}</td><td><b>{{ item[2] }}</b></td><td>{{ item[3] }}</td><td><a href="/delete_item_setting/{{ item[0] }}" class="del-btn">ژێبرن</a></td></tr>
-            {% endfor %}
-        </table>
-    </div>
-</body>
-</html>
-"""
-
-# Safe Canvas for Watermark Logo in PDF
-from reportlab.pdfgen import canvas as rl_canvas
-class WatermarkCanvas(rl_canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-    def save(self):
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_watermark()
-            super().showPage()
-        super().save()
-    def draw_watermark(self):
-        try:
-            logo_path = os.path.join(os.getcwd(), 'logo.png')
-            if os.path.exists(logo_path):
-                self.saveState()
-                if hasattr(self, 'setFillAlpha'):
-                    self.setFillAlpha(0.15)
-                self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
-                self.restoreState()
-        except:
-            pass
+# =========================================================
+# HELPERS
+# =========================================================
 
 def get_device_id():
-    if 'device_id' not in session:
-        session['device_id'] = os.urandom(8).hex()
-    return session['device_id']
+
+    if "device_id" not in session:
+        session["device_id"] = secrets.token_hex(16)
+
+    return session["device_id"]
+
+
+def logged_in():
+    return session.get("authenticated") is True
+
 
 def get_note(device_id):
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("SELECT note_text FROM notes WHERE device_id = ?", (device_id,))
-        row = c.fetchone()
-        conn.close()
-        return row[0] if row else ""
-    except: return ""
 
-def get_orders_list(device_id):
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-        rows = c.fetchall()
-        conn.close()
-        return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
-    except: return []
+    conn = get_db()
 
-@app.route('/login', methods=['GET', 'POST'])
+    row = conn.execute("""
+        SELECT note_text
+        FROM notes
+        WHERE device_id = ?
+    """, (device_id,)).fetchone()
+
+    conn.close()
+
+    return row["note_text"] if row else ""
+
+
+def get_orders(device_id):
+
+    conn = get_db()
+
+    rows = conn.execute("""
+        SELECT id, item_name, quantity, unit, category, created_at
+        FROM orders
+        WHERE device_id = ?
+        ORDER BY id ASC
+    """, (device_id,)).fetchall()
+
+    conn.close()
+
+    return [
+        {
+            "id": r["id"],
+            "item_name": r["item_name"],
+            "quantity": r["quantity"],
+            "unit": r["unit"],
+            "category": r["category"],
+            "created_at": r["created_at"]
+        }
+        for r in rows
+    ]
+
+
+def get_items(search=""):
+
+    conn = get_db()
+
+    if search:
+        rows = conn.execute("""
+            SELECT id, category, item_name, unit
+            FROM items
+            WHERE item_name LIKE ?
+               OR category LIKE ?
+            ORDER BY category, id
+        """, (
+            f"%{search}%",
+            f"%{search}%"
+        )).fetchall()
+
+    else:
+        rows = conn.execute("""
+            SELECT id, category, item_name, unit
+            FROM items
+            ORDER BY category, id
+        """).fetchall()
+
+    conn.close()
+
+    result = {}
+
+    for r in rows:
+
+        if r["category"] not in result:
+            result[r["category"]] = []
+
+        result[r["category"]].append({
+            "id": r["id"],
+            "name": r["item_name"],
+            "unit": r["unit"]
+        })
+
+    return result
+
+
+def get_all_items():
+
+    conn = get_db()
+
+    rows = conn.execute("""
+        SELECT id, category, item_name, unit
+        FROM items
+        ORDER BY category, id DESC
+    """).fetchall()
+
+    conn.close()
+
+    return rows
+
+
+# =========================================================
+# LOGIN PAGE
+# =========================================================
+
+LOGIN_TEMPLATE = """
+
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>Organic Juices</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:system-ui,-apple-system,sans-serif;
+    background:
+        radial-gradient(circle at top,#e8f5e9,#f8faf8 55%);
+}
+
+.login-card{
+    width:min(420px,92%);
+    background:white;
+    padding:35px 28px;
+    border-radius:24px;
+    box-shadow:0 15px 45px rgba(0,0,0,.10);
+    text-align:center;
+    border:1px solid #e8eee8;
+}
+
+.logo{
+    width:95px;
+    height:95px;
+    object-fit:contain;
+    margin-bottom:10px;
+}
+
+h1{
+    color:#176b2c;
+    margin:5px 0;
+}
+
+.subtitle{
+    color:#777;
+    font-size:13px;
+    margin-bottom:25px;
+}
+
+input{
+    width:100%;
+    padding:14px;
+    border:1px solid #d5ddd5;
+    border-radius:12px;
+    font-size:16px;
+    outline:none;
+}
+
+input:focus{
+    border-color:#2e7d32;
+}
+
+button{
+    width:100%;
+    margin-top:15px;
+    padding:14px;
+    border:0;
+    border-radius:12px;
+    background:#218838;
+    color:white;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.error{
+    background:#ffebee;
+    color:#c62828;
+    padding:10px;
+    border-radius:10px;
+    margin-bottom:12px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="login-card">
+
+<img src="/logo.png"
+class="logo"
+onerror="this.style.display='none'">
+
+<h1>ئۆرگانیک جویس</h1>
+
+<div class="subtitle">
+سیستەمی قایمەی کۆمپانیا
+</div>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+<form method="POST">
+
+<input
+type="password"
+name="password"
+placeholder="ڕەمزی چوونەژوورەوە"
+required
+autofocus>
+
+<button>
+🔐 چوونەژوورەوە
+</button>
+
+</form>
+
+</div>
+
+</body>
+</html>
+
+"""
+
+
+# =========================================================
+# MAIN PAGE
+# =========================================================
+
+HTML_TEMPLATE = """
+
+<!DOCTYPE html>
+
+<html lang="ku" dir="rtl">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>قایمە | Organic Juices</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:12px;
+    font-family:system-ui,-apple-system,sans-serif;
+    background:#f5f8f5;
+    color:#172017;
+}
+
+body:before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:url('/logo.png') center/280px no-repeat;
+    opacity:.035;
+    pointer-events:none;
+    z-index:-1;
+}
+
+/* HEADER */
+
+.header{
+    max-width:1200px;
+    margin:auto;
+    background:white;
+    padding:14px 18px;
+    border-radius:18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    box-shadow:0 4px 18px rgba(0,0,0,.06);
+    border-bottom:3px solid #218838;
+}
+
+.brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.brand img{
+    width:45px;
+    height:45px;
+    object-fit:contain;
+}
+
+.brand h1{
+    margin:0;
+    color:#176b2c;
+    font-size:19px;
+}
+
+.actions{
+    display:flex;
+    gap:7px;
+}
+
+.action{
+    text-decoration:none;
+    padding:9px 12px;
+    border-radius:9px;
+    font-size:12px;
+    font-weight:bold;
+    color:white;
+}
+
+.settings{
+    background:#2e7d32;
+}
+
+.logout{
+    background:#c62828;
+}
+
+/* SEARCH */
+
+.search-box{
+    max-width:1200px;
+    margin:14px auto;
+    background:white;
+    padding:12px;
+    border-radius:15px;
+    box-shadow:0 3px 15px rgba(0,0,0,.05);
+}
+
+.search-box input{
+    width:100%;
+    padding:13px;
+    border:1px solid #ddd;
+    border-radius:10px;
+    font-size:14px;
+}
+
+/* NOTE */
+
+.note{
+    max-width:1200px;
+    margin:14px auto;
+    background:#fffde7;
+    border:1px solid #dce775;
+    padding:13px;
+    border-radius:15px;
+}
+
+.note textarea{
+    width:100%;
+    height:65px;
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:10px;
+    resize:vertical;
+}
+
+.note button{
+    margin-top:7px;
+    background:#689f38;
+    color:white;
+    border:0;
+    border-radius:8px;
+    padding:8px 14px;
+    font-weight:bold;
+}
+
+/* CONTENT */
+
+.content{
+    max-width:1200px;
+    margin:auto;
+}
+
+.category{
+    margin-top:22px;
+}
+
+.category-title{
+    color:#176b2c;
+    font-size:18px;
+    font-weight:900;
+    border-right:5px solid #2e7d32;
+    padding:7px 10px;
+    background:white;
+    border-radius:8px;
+    margin-bottom:10px;
+}
+
+/* ITEMS */
+
+.grid{
+    display:grid;
+    grid-template-columns:
+        repeat(auto-fill,minmax(145px,1fr));
+    gap:10px;
+}
+
+.item{
+    background:white;
+    border:1px solid #e2e8e2;
+    border-radius:14px;
+    padding:11px;
+    box-shadow:0 3px 10px rgba(0,0,0,.04);
+    transition:.15s;
+}
+
+.item:hover{
+    transform:translateY(-2px);
+    box-shadow:0 6px 18px rgba(0,0,0,.08);
+}
+
+.item-name{
+    font-size:14px;
+    font-weight:900;
+    min-height:35px;
+}
+
+.unit{
+    font-size:11px;
+    color:#689f38;
+    margin-bottom:8px;
+}
+
+.controls{
+    display:flex;
+    gap:4px;
+}
+
+.qty{
+    width:42px;
+    text-align:center;
+    border:1px solid #ccc;
+    border-radius:7px;
+    font-weight:bold;
+}
+
+.small-btn{
+    width:29px;
+    border:0;
+    border-radius:7px;
+    background:#eeeeee;
+    font-weight:bold;
+}
+
+.add{
+    flex:1;
+    border:0;
+    border-radius:7px;
+    background:#218838;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+/* SUMMARY */
+
+.summary{
+    max-width:1200px;
+    margin:25px auto;
+    background:white;
+    border:2px solid #218838;
+    border-radius:18px;
+    padding:15px;
+    box-shadow:0 7px 25px rgba(0,0,0,.08);
+}
+
+.summary-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+}
+
+.summary h2{
+    color:#176b2c;
+    margin:0;
+}
+
+.count{
+    background:#e8f5e9;
+    color:#176b2c;
+    padding:6px 10px;
+    border-radius:20px;
+    font-weight:bold;
+    font-size:12px;
+}
+
+.table-wrap{
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:12px;
+}
+
+th,td{
+    padding:10px;
+    border-bottom:1px solid #eee;
+    text-align:right;
+    font-size:13px;
+}
+
+th{
+    background:#f1f8f2;
+    color:#176b2c;
+}
+
+.delete-order{
+    border:0;
+    background:#ffebee;
+    color:#c62828;
+    border-radius:6px;
+    padding:5px 8px;
+    cursor:pointer;
+}
+
+.pdf{
+    width:100%;
+    padding:13px;
+    margin-top:12px;
+    border:0;
+    border-radius:10px;
+    background:#176b2c;
+    color:white;
+    font-size:15px;
+    font-weight:bold;
+}
+
+.clear{
+    width:100%;
+    padding:11px;
+    margin-top:7px;
+    border:0;
+    border-radius:10px;
+    background:#c62828;
+    color:white;
+    font-weight:bold;
+}
+
+/* MOBILE */
+
+@media(max-width:600px){
+
+    body{
+        padding:7px;
+    }
+
+    .header{
+        padding:10px;
+    }
+
+    .brand h1{
+        font-size:15px;
+    }
+
+    .brand img{
+        width:38px;
+        height:38px;
+    }
+
+    .action{
+        padding:7px;
+        font-size:10px;
+    }
+
+    .grid{
+        grid-template-columns:
+            repeat(2,minmax(0,1fr));
+        gap:7px;
+    }
+
+    .item{
+        padding:8px;
+    }
+
+    .item-name{
+        font-size:12px;
+    }
+
+    .qty{
+        width:34px;
+    }
+
+    .small-btn{
+        width:25px;
+    }
+
+    .add{
+        font-size:10px;
+    }
+
+    th,td{
+        padding:7px 5px;
+        font-size:11px;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<!-- HEADER -->
+
+<header class="header">
+
+<div class="brand">
+
+<img src="/logo.png"
+onerror="this.style.display='none'">
+
+<h1>کۆمپانییا ئۆرگانیک جویس</h1>
+
+</div>
+
+<div class="actions">
+
+<a class="action settings"
+href="/settings">
+⚙️ سێتینگ
+</a>
+
+<a class="action logout"
+href="/logout">
+خروج
+</a>
+
+</div>
+
+</header>
+
+
+<!-- SEARCH -->
+
+<div class="search-box">
+
+<input
+id="search"
+type="search"
+placeholder="🔎 گەڕان بۆ بابەت..."
+value="{{ search }}"
+oninput="searchItems()">
+
+</div>
+
+
+<!-- NOTE -->
+
+<div class="note">
+
+<strong>📝 تێبینی قایمە</strong>
+
+<textarea
+id="noteInput"
+placeholder="تێبینی خۆت لێرە بنووسە..."
+>{{ current_note }}</textarea>
+
+<button onclick="saveNote()">
+💾 تومارکردنی تێبینی
+</button>
+
+</div>
+
+
+<div class="content">
+
+{% for category, items in all_items.items() %}
+
+<section
+class="category"
+data-category="{{ category }}">
+
+<div class="category-title">
+🔸 {{ category }}
+</div>
+
+<div class="grid">
+
+{% for item in items %}
+
+<div
+class="item"
+data-name="{{ item.name|lower }}">
+
+<div class="item-name">
+{{ item.name }}
+</div>
+
+<div class="unit">
+یەکە: {{ item.unit }}
+</div>
+
+<div class="controls">
+
+<button
+class="small-btn"
+onclick="changeQty(this,-1)">
+−
+</button>
+
+<input
+class="qty"
+type="number"
+value="1"
+min="0.1"
+step="0.1">
+
+<button
+class="small-btn"
+onclick="changeQty(this,1)">
++
+</button>
+
+<button
+class="add"
+data-id="{{ item.id }}"
+data-name="{{ item.name }}"
+data-unit="{{ item.unit }}"
+data-category="{{ category }}"
+onclick="addItem(this)">
+زێدە
+</button>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</section>
+
+{% endfor %}
+
+</div>
+
+
+<!-- SUMMARY -->
+
+<div
+class="summary"
+id="summary"
+style="{% if orders %}{% else %}display:none{% endif %}">
+
+<div class="summary-header">
+
+<h2>📋 قایمە</h2>
+
+<span class="count"
+id="orderCount">
+{{ orders|length }} بابەت
+</span>
+
+</div>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>بەش</th>
+<th>بابەت</th>
+<th>بڕ</th>
+<th>یەکە</th>
+<th>کردار</th>
+</tr>
+
+</thead>
+
+<tbody id="ordersBody">
+
+{% for order in orders %}
+
+<tr>
+
+<td>{{ order.category }}</td>
+
+<td><b>{{ order.item_name }}</b></td>
+
+<td>{{ order.quantity }}</td>
+
+<td>{{ order.unit }}</td>
+
+<td>
+<button
+class="delete-order"
+onclick="deleteOrder({{ order.id }})">
+🗑️
+</button>
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<button
+class="pdf"
+onclick="downloadPDF()">
+
+📄 دروستکردنی PDF
+
+</button>
+
+<button
+class="clear"
+onclick="clearOrders()">
+
+🗑️ پاککردنی هەموو قایمە
+
+</button>
+
+</div>
+
+
+<script>
+
+function changeQty(button, amount){
+
+    const input =
+        button.parentElement.querySelector(".qty");
+
+    let value =
+        parseFloat(input.value) || 1;
+
+    value += amount;
+
+    if(value < 0.1)
+        value = 0.1;
+
+    input.value =
+        Number(value.toFixed(2));
+}
+
+
+async function addItem(button){
+
+    const controls =
+        button.parentElement;
+
+    const quantity =
+        controls.querySelector(".qty").value;
+
+    const form =
+        new FormData();
+
+    form.append(
+        "item_name",
+        button.dataset.name
+    );
+
+    form.append(
+        "unit",
+        button.dataset.unit
+    );
+
+    form.append(
+        "category",
+        button.dataset.category
+    );
+
+    form.append(
+        "quantity",
+        quantity
+    );
+
+    button.disabled = true;
+    button.innerText = "✓";
+
+    try{
+
+        const response =
+            await fetch(
+                "/quick_add_ajax",
+                {
+                    method:"POST",
+                    body:form
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if(data.status === "success"){
+
+            updateOrders(data.orders);
+
+            controls.querySelector(".qty").value = 1;
+
+        }else{
+
+            alert(data.message || "هەڵەیەک ڕوویدا");
+
+        }
+
+    }catch(error){
+
+        alert("پەیوەندی بە سێرڤەرەوە نەکرا");
+
+    }
+
+    setTimeout(()=>{
+        button.disabled=false;
+        button.innerText="زێدە";
+    },400);
+
+}
+
+
+function updateOrders(orders){
+
+    const summary =
+        document.getElementById("summary");
+
+    const body =
+        document.getElementById("ordersBody");
+
+    const count =
+        document.getElementById("orderCount");
+
+    if(!orders.length){
+
+        summary.style.display="none";
+        body.innerHTML="";
+        count.innerText="0 بابەت";
+
+        return;
+    }
+
+    summary.style.display="block";
+
+    count.innerText =
+        orders.length + " بابەت";
+
+    body.innerHTML =
+        orders.map(o => `
+
+        <tr>
+
+        <td>${escapeHTML(o.category)}</td>
+
+        <td><b>${escapeHTML(o.item_name)}</b></td>
+
+        <td>${o.quantity}</td>
+
+        <td>${escapeHTML(o.unit)}</td>
+
+        <td>
+
+        <button
+        class="delete-order"
+        onclick="deleteOrder(${o.id})">
+
+        🗑️
+
+        </button>
+
+        </td>
+
+        </tr>
+
+        `).join("");
+
+}
+
+
+async function deleteOrder(id){
+
+    if(!confirm("ئەم بابەتە لە قایمە بسڕینەوە؟"))
+        return;
+
+    const response =
+        await fetch(
+            "/delete_order/" + id,
+            {
+                method:"POST"
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if(data.status === "success")
+        updateOrders(data.orders);
+
+}
+
+
+async function clearOrders(){
+
+    if(!confirm(
+        "دڵنیایت دەتەوێت هەموو قایمە پاک بکەیتەوە؟"
+    ))
+        return;
+
+    const response =
+        await fetch("/clear_ajax");
+
+    const data =
+        await response.json();
+
+    if(data.status === "success")
+        updateOrders([]);
+
+}
+
+
+async function saveNote(){
+
+    const note =
+        document.getElementById(
+            "noteInput"
+        ).value;
+
+    const form =
+        new FormData();
+
+    form.append("note",note);
+
+    const response =
+        await fetch(
+            "/save_note",
+            {
+                method:"POST",
+                body:form
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if(data.status === "success")
+        alert("✓ تێبینی بە سەرکەوتوویی هەڵگیرا");
+
+}
+
+
+function searchItems(){
+
+    const value =
+        document
+        .getElementById("search")
+        .value
+        .toLowerCase()
+        .trim();
+
+    document
+    .querySelectorAll(".category")
+    .forEach(category => {
+
+        let visible = 0;
+
+        category
+        .querySelectorAll(".item")
+        .forEach(item => {
+
+            const name =
+                item.dataset.name;
+
+            const show =
+                !value ||
+                name.includes(value);
+
+            item.style.display =
+                show ? "" : "none";
+
+            if(show)
+                visible++;
+
+        });
+
+        category.style.display =
+            visible ? "" : "none";
+
+    });
+
+}
+
+
+function downloadPDF(){
+
+    window.location.href =
+        "/download_pdf";
+
+}
+
+
+function escapeHTML(value){
+
+    return String(value)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+
+}
+
+</script>
+
+</body>
+</html>
+
+"""
+
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
+SETTINGS_TEMPLATE = """
+
+<!DOCTYPE html>
+
+<html lang="ku" dir="rtl">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>سێتینگ | Organic Juices</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:15px;
+    background:#f5f8f5;
+    font-family:system-ui;
+}
+
+.container{
+    max-width:1100px;
+    margin:auto;
+}
+
+.header,
+.card{
+    background:white;
+    border-radius:16px;
+    padding:18px;
+    margin-bottom:15px;
+    box-shadow:0 4px 18px rgba(0,0,0,.05);
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+h2,h3{
+    color:#176b2c;
+}
+
+input,select{
+    width:100%;
+    padding:12px;
+    margin:6px 0 12px;
+    border:1px solid #ccc;
+    border-radius:9px;
+}
+
+button{
+    width:100%;
+    padding:11px;
+    border:0;
+    border-radius:9px;
+    background:#218838;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.back{
+    text-decoration:none;
+    background:#218838;
+    color:white;
+    padding:9px 13px;
+    border-radius:9px;
+}
+
+.table-wrap{
+    overflow:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th,td{
+    padding:10px;
+    border-bottom:1px solid #eee;
+    text-align:right;
+    white-space:nowrap;
+}
+
+th{
+    color:#176b2c;
+    background:#f1f8f2;
+}
+
+.actions{
+    display:flex;
+    gap:5px;
+}
+
+.edit{
+    background:#1565c0;
+    color:white;
+    padding:6px 9px;
+    border-radius:6px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+.delete{
+    background:#c62828;
+    color:white;
+    padding:6px 9px;
+    border-radius:6px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+
+<h2>⚙️ سێتینگی سیستەم</h2>
+
+<a class="back" href="/">
+⬅️ گەڕانەوە
+</a>
+
+</div>
+
+
+<div class="card">
+
+<h3>➕ زیادکردنی بابەتی نوێ</h3>
+
+<form method="POST"
+action="/add_item_setting">
+
+<label>بەش</label>
+
+<select name="category">
+
+{% for cat in categories %}
+
+<option value="{{ cat }}">
+{{ cat }}
+</option>
+
+{% endfor %}
+
+</select>
+
+<label>ناوی بابەت</label>
+
+<input
+name="item_name"
+placeholder="ناوی بابەت"
+required>
+
+<label>یەکە</label>
+
+<input
+name="unit"
+placeholder="کیلو / دانە / کارتۆن..."
+required>
+
+<button>
+💾 تومارکردن
+</button>
+
+</form>
+
+</div>
+
+
+<div class="card">
+
+<h3>
+📋 لیستی هەموو بابەتەکان
+</h3>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>#</th>
+<th>بەش</th>
+<th>ناو</th>
+<th>یەکە</th>
+<th>کردار</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for item in items %}
+
+<tr>
+
+<td>{{ item.id }}</td>
+
+<td>{{ item.category }}</td>
+
+<td><b>{{ item.item_name }}</b></td>
+
+<td>{{ item.unit }}</td>
+
+<td>
+
+<div class="actions">
+
+<a
+class="edit"
+href="/edit_item/{{ item.id }}">
+✏️ Edit
+</a>
+
+<a
+class="delete"
+href="/delete_item_setting/{{ item.id }}"
+onclick="return confirm('دڵنیایت؟')">
+🗑️ Delete
+</a>
+
+</div>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+</body>
+</html>
+
+"""
+
+
+# =========================================================
+# EDIT ITEM
+# =========================================================
+
+EDIT_TEMPLATE = """
+
+<!DOCTYPE html>
+
+<html lang="ku" dir="rtl">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>Edit Item</title>
+
+<style>
+
+body{
+    margin:0;
+    padding:20px;
+    background:#f5f8f5;
+    font-family:system-ui;
+}
+
+.card{
+    max-width:500px;
+    margin:30px auto;
+    background:white;
+    padding:25px;
+    border-radius:18px;
+    box-shadow:0 8px 30px rgba(0,0,0,.08);
+}
+
+h2{
+    color:#176b2c;
+}
+
+input,select{
+    width:100%;
+    padding:12px;
+    margin:7px 0 15px;
+    border:1px solid #ccc;
+    border-radius:9px;
+    box-sizing:border-box;
+}
+
+button{
+    width:100%;
+    padding:13px;
+    border:0;
+    border-radius:9px;
+    background:#218838;
+    color:white;
+    font-weight:bold;
+}
+
+.back{
+    display:block;
+    text-align:center;
+    margin-top:12px;
+    color:#176b2c;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>✏️ دەستکاریکردنی بابەت</h2>
+
+<form method="POST">
+
+<label>بەش</label>
+
+<select name="category">
+
+{% for cat in categories %}
+
+<option
+value="{{ cat }}"
+{% if item.category == cat %}
+selected
+{% endif %}>
+
+{{ cat }}
+
+</option>
+
+{% endfor %}
+
+</select>
+
+<label>ناوی بابەت</label>
+
+<input
+name="item_name"
+value="{{ item.item_name }}"
+required>
+
+<label>یەکە</label>
+
+<input
+name="unit"
+value="{{ item.unit }}"
+required>
+
+<button>
+💾 پاشەکەوتکردن
+</button>
+
+</form>
+
+<a class="back" href="/settings">
+⬅️ گەڕانەوە بۆ سێتینگ
+</a>
+
+</div>
+
+</body>
+</html>
+
+"""
+
+
+# =========================================================
+# LOGIN
+# =========================================================
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
+
     error = None
-    if request.method == 'POST':
-        if request.form.get('password') != SHARED_PASSWORD:
-            error = "ڕەمز هەڵەیە!"
-        else:
-            session['authenticated'] = True
-            get_device_id()
-            return redirect(url_for('index'))
-    return render_template_string(LOGIN_TEMPLATE, error=error)
 
-@app.route('/logout')
+    if request.method == "POST":
+
+        password = request.form.get("password", "")
+
+        if secrets.compare_digest(
+            password,
+            SHARED_PASSWORD
+        ):
+
+            session.clear()
+
+            session["authenticated"] = True
+
+            session["device_id"] = secrets.token_hex(16)
+
+            return redirect(url_for("index"))
+
+        error = "❌ ڕەمز هەڵەیە"
+
+    return render_template_string(
+        LOGIN_TEMPLATE,
+        error=error
+    )
+
+
+@app.route("/logout")
 def logout():
-    session.pop('authenticated', None)
-    return redirect(url_for('login'))
 
-@app.route('/')
+    session.clear()
+
+    return redirect(url_for("login"))
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+@app.route("/")
 def index():
-    if not session.get('authenticated'): return redirect(url_for('login'))
-    device_id = get_device_id()
-    raw_orders = get_orders_list(device_id)
-    tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
-    return render_template_string(HTML_TEMPLATE, all_items=get_all_items_dict(), orders=tuple_orders, current_note=get_note(device_id))
 
-@app.route('/save_note', methods=['POST'])
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    search = request.args.get("search", "").strip()
+
+    device_id = get_device_id()
+
+    return render_template_string(
+        HTML_TEMPLATE,
+        all_items=get_items(search),
+        orders=get_orders(device_id),
+        current_note=get_note(device_id),
+        search=search
+    )
+
+
+# =========================================================
+# NOTE
+# =========================================================
+
+@app.route("/save_note", methods=["POST"])
 def save_note():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO notes (device_id, note_text) VALUES (?, ?)", (get_device_id(), request.form.get('note', '')))
-        conn.commit(); conn.close()
-        return jsonify({"status": "success"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/settings')
-def settings_page():
-    if not session.get('authenticated'): return redirect(url_for('login'))
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("SELECT id, category, item_name, unit FROM items ORDER BY category, id DESC")
-        rows = c.fetchall(); conn.close()
-    except: rows = []
-    return render_template_string(SETTINGS_TEMPLATE, all_items_list=rows)
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
 
-@app.route('/add_item_setting', methods=['POST'])
-def add_item_setting():
-    if not session.get('authenticated'): return redirect(url_for('login'))
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", 
-                  (request.form.get('category'), request.form.get('item_name'), request.form.get('unit')))
-        conn.commit(); conn.close()
-    except: pass
-    return redirect(url_for('settings_page'))
+    device_id = get_device_id()
 
-@app.route('/delete_item_setting/<int:item_id>')
-def delete_item_setting(item_id):
-    if not session.get('authenticated'): return redirect(url_for('login'))
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("DELETE FROM items WHERE id = ?", (item_id,))
-        conn.commit(); conn.close()
-    except: pass
-    return redirect(url_for('settings_page'))
+    note = request.form.get(
+        "note",
+        ""
+    ).strip()
 
-@app.route('/logo.png')
-def get_logo():
-    try:
-        return send_from_directory(os.getcwd(), 'logo.png')
-    except:
-        return "", 404
+    conn = get_db()
 
-@app.route('/quick_add_ajax', methods=['POST'])
+    conn.execute("""
+        INSERT OR REPLACE INTO notes
+        (device_id, note_text)
+        VALUES (?, ?)
+    """, (
+        device_id,
+        note
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success"
+    })
+
+
+# =========================================================
+# ADD ORDER
+# =========================================================
+
+@app.route("/quick_add_ajax", methods=["POST"])
 def quick_add_ajax():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
-    device_id = get_device_id()
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("INSERT INTO orders (device_id, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
-                  (device_id, request.form['item_name'], float(request.form['quantity']), request.form['unit'], request.form['category']))
-        conn.commit(); conn.close()
-        return jsonify({"status": "success", "orders": get_orders_list(device_id)})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/clear_ajax')
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
+
+    try:
+
+        item_name = request.form.get(
+            "item_name",
+            ""
+        ).strip()
+
+        unit = request.form.get(
+            "unit",
+            ""
+        ).strip()
+
+        category = request.form.get(
+            "category",
+            ""
+        ).strip()
+
+        quantity = float(
+            request.form.get(
+                "quantity",
+                0
+            )
+        )
+
+        if not item_name:
+            raise ValueError("ناوی بابەت بەتاڵە")
+
+        if quantity <= 0:
+            raise ValueError("بڕ دەبێت لە سفر گەورەتر بێت")
+
+        device_id = get_device_id()
+
+        conn = get_db()
+
+        conn.execute("""
+            INSERT INTO orders
+            (
+                device_id,
+                item_name,
+                quantity,
+                unit,
+                category
+            )
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            device_id,
+            item_name,
+            quantity,
+            unit,
+            category
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "status": "success",
+            "orders": get_orders(device_id)
+        })
+
+    except Exception as e:
+
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 400
+
+
+# =========================================================
+# DELETE SINGLE ORDER
+# =========================================================
+
+@app.route(
+    "/delete_order/<int:order_id>",
+    methods=["POST"]
+)
+def delete_order(order_id):
+
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
+
+    device_id = get_device_id()
+
+    conn = get_db()
+
+    conn.execute("""
+        DELETE FROM orders
+        WHERE id = ?
+        AND device_id = ?
+    """, (
+        order_id,
+        device_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "orders": get_orders(device_id)
+    })
+
+
+# =========================================================
+# CLEAR ORDERS
+# =========================================================
+
+@app.route("/clear_ajax")
 def clear_ajax():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
-    device_id = get_device_id()
-    try:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("DELETE FROM orders WHERE device_id = ?", (device_id,))
-        conn.commit(); conn.close()
-        return jsonify({"status": "success", "orders": []})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/download_pdf')
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
+
+    device_id = get_device_id()
+
+    conn = get_db()
+
+    conn.execute("""
+        DELETE FROM orders
+        WHERE device_id = ?
+    """, (
+        device_id,
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "orders": []
+    })
+
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
+@app.route("/settings")
+def settings_page():
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    categories = [
+        r["name"]
+        for r in conn.execute("""
+            SELECT name
+            FROM categories
+            ORDER BY id
+        """).fetchall()
+    ]
+
+    conn.close()
+
+    return render_template_string(
+        SETTINGS_TEMPLATE,
+        items=get_all_items(),
+        categories=categories
+    )
+
+
+# =========================================================
+# ADD ITEM
+# =========================================================
+
+@app.route(
+    "/add_item_setting",
+    methods=["POST"]
+)
+def add_item_setting():
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    category = request.form.get(
+        "category",
+        ""
+    ).strip()
+
+    item_name = request.form.get(
+        "item_name",
+        ""
+    ).strip()
+
+    unit = request.form.get(
+        "unit",
+        ""
+    ).strip()
+
+    if not item_name or not unit:
+        return redirect(
+            url_for("settings_page")
+        )
+
+    conn = get_db()
+
+    # جلوگیری لە دووبارەکردنەوەی هەمان بابەت
+    exists = conn.execute("""
+        SELECT id
+        FROM items
+        WHERE category = ?
+        AND item_name = ?
+    """, (
+        category,
+        item_name
+    )).fetchone()
+
+    if not exists:
+
+        conn.execute("""
+            INSERT INTO items
+            (category, item_name, unit)
+            VALUES (?, ?, ?)
+        """, (
+            category,
+            item_name,
+            unit
+        ))
+
+        conn.commit()
+
+    conn.close()
+
+    return redirect(
+        url_for("settings_page")
+    )
+
+
+# =========================================================
+# EDIT ITEM
+# =========================================================
+
+@app.route(
+    "/edit_item/<int:item_id>",
+    methods=["GET", "POST"]
+)
+def edit_item(item_id):
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    item = conn.execute("""
+        SELECT *
+        FROM items
+        WHERE id = ?
+    """, (
+        item_id,
+    )).fetchone()
+
+    categories = [
+        r["name"]
+        for r in conn.execute("""
+            SELECT name
+            FROM categories
+            ORDER BY id
+        """).fetchall()
+    ]
+
+    if not item:
+
+        conn.close()
+
+        return redirect(
+            url_for("settings_page")
+        )
+
+    if request.method == "POST":
+
+        category = request.form.get(
+            "category",
+            ""
+        ).strip()
+
+        item_name = request.form.get(
+            "item_name",
+            ""
+        ).strip()
+
+        unit = request.form.get(
+            "unit",
+            ""
+        ).strip()
+
+        conn.execute("""
+            UPDATE items
+            SET category = ?,
+                item_name = ?,
+                unit = ?
+            WHERE id = ?
+        """, (
+            category,
+            item_name,
+            unit,
+            item_id
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return redirect(
+            url_for("settings_page")
+        )
+
+    conn.close()
+
+    return render_template_string(
+        EDIT_TEMPLATE,
+        item=item,
+        categories=categories
+    )
+
+
+# =========================================================
+# DELETE ITEM
+# =========================================================
+
+@app.route(
+    "/delete_item_setting/<int:item_id>"
+)
+def delete_item_setting(item_id):
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    conn.execute("""
+        DELETE FROM items
+        WHERE id = ?
+    """, (
+        item_id,
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(
+        url_for("settings_page")
+    )
+
+
+# =========================================================
+# LOGO
+# =========================================================
+
+@app.route("/logo.png")
+def logo():
+
+    logo_path = os.path.join(
+        os.getcwd(),
+        "logo.png"
+    )
+
+    if os.path.exists(logo_path):
+        return send_file(
+            logo_path,
+            mimetype="image/png"
+        )
+
+    return "", 404
+
+
+# =========================================================
+# PDF
+# =========================================================
+
+@app.route("/download_pdf")
 def download_pdf():
-    if not session.get('authenticated'): return redirect(url_for('login'))
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
     try:
+
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import (
+            getSampleStyleSheet,
+            ParagraphStyle
+        )
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle
+        )
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
-        
-        device_id = get_device_id()
-        items_dict = get_all_items_dict()
-        user_note = get_note(device_id)
-        
-        font_name = 'Helvetica'
-        for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
-            if os.path.exists(font_path):
-                try:
-                    pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
-                    font_name = 'ArabicFont'
-                    break
-                except: pass
 
-        pdf_filename = "Organic_Juices_Qayma.pdf"
-        doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
-        story = []
+        device_id = get_device_id()
+
+        orders = get_orders(device_id)
+
+        note = get_note(device_id)
+
+        # -------------------------------------------------
+        # Font
+        # -------------------------------------------------
+
+        font_name = "Helvetica"
+
+        font_candidates = [
+
+            os.path.join(
+                os.getcwd(),
+                "Amiri",
+                "Amiri-Regular.ttf"
+            ),
+
+            os.path.join(
+                os.getcwd(),
+                "Amiri-Regular.ttf"
+            ),
+
+            "C:\\Windows\\Fonts\\arial.ttf"
+
+        ]
+
+        for path in font_candidates:
+
+            if os.path.exists(path):
+
+                try:
+
+                    pdfmetrics.registerFont(
+                        TTFont(
+                            "OrganicArabic",
+                            path
+                        )
+                    )
+
+                    font_name = "OrganicArabic"
+
+                    break
+
+                except:
+                    pass
+
+        # -------------------------------------------------
+        # PDF
+        # -------------------------------------------------
+
+        filename = (
+            "Organic_Juices_Qayma_"
+            + datetime.now().strftime(
+                "%Y%m%d_%H%M"
+            )
+            + ".pdf"
+        )
+
+        doc = SimpleDocTemplate(
+            filename,
+            pagesize=A4,
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=30,
+            bottomMargin=30
+        )
+
         styles = getSampleStyleSheet()
-        
-        title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
-        subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#33691e'))
-        note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_name, textColor=colors.HexColor('#b71c1c'))
-        header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
-        
-        story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
-        story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
-        
-        if user_note:
-            story.append(Spacer(1, 6))
-            story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
-            
-        story.append(Spacer(1, 10))
-        
-        categories = ["فێقی", "مەعمەل", "مەغزەن"]
-        table_headers = [Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style) for cat in categories]
-        max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
-        table_data = [table_headers]
-        
-        for i in range(max_rows):
-            row = []
-            for cat in categories:
-                items_in_cat = items_dict.get(cat, [])
-                if i < len(items_in_cat):
-                    item_name, unit = items_in_cat[i]
-                    name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=9, alignment=2))
-                    unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=8, alignment=0))
-                    
-                    cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
-                    cell_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
-                    row.append(cell_table)
-                else:
-                    row.append(Paragraph("", header_cell_style))
-            table_data.append(row)
-            
-        col_width = 560 / 3
-        t = Table(table_data, colWidths=[col_width, col_width, col_width])
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0,0), (-1,-1), 3), ('TOPPADDING', (0,0), (-1,-1), 3), ('LEFTPADDING', (0,0), (-1,-1), 4), ('RIGHTPADDING', (0,0), (-1,-1), 4)]))
-        
-        story.append(t)
-        doc.build(story, canvasmaker=WatermarkCanvas)
-        return send_file(pdf_filename, as_attachment=True)
+
+        title_style = ParagraphStyle(
+            "Title",
+            parent=styles["Heading1"],
+            fontName=font_name,
+            fontSize=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor(
+                "#176b2c"
+            )
+        )
+
+        normal_style = ParagraphStyle(
+            "NormalArabic",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=10,
+            alignment=TA_RIGHT
+        )
+
+        center_style = ParagraphStyle(
+            "Center",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=10,
+            alignment=TA_CENTER
+        )
+
+        story = []
+
+        # Header
+        story.append(
+            Paragraph(
+                "کۆمپانییا ئۆرگانیک جویس",
+                title_style
+            )
+        )
+
+        story.append(
+            Spacer(1, 5)
+        )
+
+        story.append(
+            Paragraph(
+                "لیستا قایمە",
+                center_style
+            )
+        )
+
+        story.append(
+            Spacer(1, 5)
+        )
+
+        story.append(
+            Paragraph(
+                "بەروار: "
+                + datetime.now().strftime(
+                    "%Y-%m-%d"
+                )
+                + " | کات: "
+                + datetime.now().strftime(
+                    "%H:%M"
+                ),
+                center_style
+            )
+        )
+
+        story.append(
+            Spacer(1, 15)
+        )
+
+        # Note
+        if note:
+
+            story.append(
+                Paragraph(
+                    "<b>تێبینی:</b> "
+                    + note,
+                    normal_style
+                )
+            )
+
+            story.append(
+                Spacer(1, 10)
+            )
+
+        # Table
+        table_data = [
+
+            [
+                Paragraph(
+                    "بەش",
+                    center_style
+                ),
+
+                Paragraph(
+                    "بابەت",
+                    center_style
+                ),
+
+                Paragraph(
+                    "بڕ",
+                    center_style
+                ),
+
+                Paragraph(
+                    "یەکە",
+                    center_style
+                )
+            ]
+
+        ]
+
+        for order in orders:
+
+            table_data.append([
+
+                Paragraph(
+                    str(order["category"]),
+                    center_style
+                ),
+
+                Paragraph(
+                    "<b>"
+                    + str(order["item_name"])
+                    + "</b>",
+                    center_style
+                ),
+
+                Paragraph(
+                    str(order["quantity"]),
+                    center_style
+                ),
+
+                Paragraph(
+                    str(order["unit"]),
+                    center_style
+                )
+
+            ])
+
+        if not orders:
+
+            table_data.append([
+
+                Paragraph(
+                    "قایمە بەتاڵە",
+                    center_style
+                ),
+                "",
+                "",
+                ""
+
+            ])
+
+        table = Table(
+            table_data,
+            colWidths=[
+                90,
+                230,
+                70,
+                70
+            ],
+            repeatRows=1
+        )
+
+        table.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor(
+                        "#e8f5e9"
+                    )
+                ),
+
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor(
+                        "#176b2c"
+                    )
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.HexColor(
+                        "#cfd8cf"
+                    )
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "ALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "CENTER"
+                ),
+
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                ),
+
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                )
+
+            ])
+        )
+
+        story.append(table)
+
+        story.append(
+            Spacer(1, 15)
+        )
+
+        story.append(
+            Paragraph(
+                "کۆی بابەتەکان: "
+                + str(len(orders)),
+                center_style
+            )
+        )
+
+        doc.build(story)
+
+        return send_file(
+            filename,
+            as_attachment=True
+        )
+
     except Exception as e:
-        return f"PDF Error: {str(e)}", 500
+
+        return (
+            "PDF Error: "
+            + str(e),
+            500
+        )
+
+
+# =========================================================
+# RUN
+# =========================================================
 
 if __name__ == "__main__":
+
     init_db()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False
+    )
