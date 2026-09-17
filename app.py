@@ -643,7 +643,7 @@ def download_pdf():
     
     title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
-    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
+    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
     section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
     header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
@@ -652,7 +652,7 @@ def download_pdf():
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
     
     if user_note:
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 8))
         story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
         
     story.append(Spacer(1, 10))
