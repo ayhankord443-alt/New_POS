@@ -285,7 +285,6 @@ HTML_TEMPLATE = """
         <table id="ordersTable">
             <thead>
                 <tr>
-                    <th>بەش</th>
                     <th>بابەت</th>
                     <th>بڕ</th>
                     <th>یەکە</th>
@@ -294,7 +293,6 @@ HTML_TEMPLATE = """
             <tbody id="ordersTableBody">
                 {% for item in orders %}
                 <tr>
-                    <td>{{ item[4] }}</td>
                     <td><b>{{ item[1] }}</b></td>
                     <td>{{ item[2] }}</td>
                     <td>{{ item[3] }}</td>
@@ -362,7 +360,6 @@ HTML_TEMPLATE = """
             container.style.display = 'block';
             tbody.innerHTML = orders.map(item => `
                 <tr>
-                    <td>${item.category}</td>
                     <td><b>${item.item_name}</b></td>
                     <td>${item.quantity}</td>
                     <td>${item.unit}</td>
@@ -486,7 +483,7 @@ class NumberedCanvas(canvas.Canvas):
         if os.path.exists(logo_path):
             self.saveState()
             if hasattr(self, 'setFillAlpha'):
-                self.setFillAlpha(0.10)
+                self.setFillAlpha(0.08)
             self.drawImage(logo_path, 270, 147, width=300, height=300, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
@@ -646,7 +643,7 @@ def download_pdf():
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
     section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
     
-    # Correct alignments for RTL columns: Column 0 is right (İtem), Column 1 is center (Quantity), Column 2 is left (Unit)
+    # Correct alignments for 3 RTL columns: [Item (Right), Quantity (Center), Unit (Left)]
     header_right_style = ParagraphStyle('HRS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     header_center_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     header_left_style = ParagraphStyle('HLS', parent=styles['Normal'], alignment=0, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
@@ -664,7 +661,6 @@ def download_pdf():
         
     story.append(Spacer(1, 10))
     
-    # Group orders by category
     categories = {}
     for item in orders:
         cat = item["category"]
@@ -672,8 +668,8 @@ def download_pdf():
             categories[cat] = []
         categories[cat].append(item)
     
-    # Correct column widths matching RTL order: [Item (Right), Quantity (Center), Unit (Left)] -> Total width = 791 points
-    col_widths = [350, 221, 220] 
+    # Exact fit for 3 columns on A4 Landscape width (791 points total width: 450 + 171 + 170)
+    col_widths = [450, 171, 170] 
     
     for cat_name, cat_items in categories.items():
         cat_story = []
