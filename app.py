@@ -34,7 +34,6 @@ def init_db():
                   item_name TEXT,
                   unit TEXT)''')
                   
-    # خشتەیەک بۆ پاراستنا تێبینیان (Notes)
     c.execute('''CREATE TABLE IF NOT EXISTS notes
                  (device_id TEXT PRIMARY KEY,
                   note_text TEXT)''')
@@ -220,7 +219,6 @@ HTML_TEMPLATE = """
         .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         
-        /* تێبینی (Note Box) */
         .note-box { background: #f9fbe7; border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
         .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
@@ -253,7 +251,6 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- بەشێ تێبینیان -->
     <div class="note-box">
         <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر PDF و لیستێ دێ دیار بیت):</label>
         <textarea id="noteInput" placeholder="تێبینییا خۆ لێرە بنڤیسە...">{{ current_note }}</textarea>
@@ -659,7 +656,6 @@ def download_pdf():
         
     story.append(Spacer(1, 10))
     
-    # دڵنیابوون ژ سێ ستوونان: فێقی، مەعمەل، مەغزەن
     categories = ["فێقی", "مەعمەل", "مەغزەن"]
     
     table_headers = []
@@ -676,7 +672,8 @@ def download_pdf():
             items_in_cat = items_dict.get(cat, [])
             if i < len(items_in_cat):
                 item_name, unit = items_in_cat[i]
-                text_cell = f"{reshape_text(item_name)}  ✓"
+                # زێدەکرنا یەکێ دگەل ناڤێ بابەتی
+                text_cell = f"{reshape_text(item_name)} ({reshape_text(unit)})  ✓"
                 row.append(Paragraph(text_cell, cell_style))
             else:
                 row.append(Paragraph("", cell_style))
