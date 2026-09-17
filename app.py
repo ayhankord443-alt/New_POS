@@ -599,7 +599,7 @@ def get_logo():
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+        return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -649,8 +649,6 @@ def download_pdf():
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
     header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     
-    # ستاڵی نوێ بۆ ناڤ و یەکە: ناڤ ل ڕاستێ (alignment=2) و یەکە ل چەپێ (alignment=0) ب ڕێکا تابلۆیا ناڤخویی (Nested Table) د ناو PDF دا
-    
     story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
     
@@ -677,9 +675,9 @@ def download_pdf():
             if i < len(items_in_cat):
                 item_name, unit = items_in_cat[i]
                 
-                # دروستکرنا خشتەیەکا تەسوک د ناڤ خشتەی دا دا ناڤ بچیتە ڕاستێ و یەکە بچیتە چەپێ ب رێکوپێکی
+                # ناڤ ل ڕاستێ (alignment=2)، و یەکە ل چەپێ (alignment=0) د ناو خانەکا پاقژ دا
                 name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_font_name, fontSize=9, alignment=2))
-                unit_para = Paragraph(f"<font color='#666'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_font_name, fontSize=8, alignment=0))
+                unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_font_name, fontSize=8, alignment=0))
                 
                 cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
                 cell_table.setStyle(TableStyle([
@@ -716,4 +714,5 @@ def download_pdf():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
