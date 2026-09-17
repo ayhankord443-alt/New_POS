@@ -439,30 +439,36 @@ INVOICE_TEMPLATE = """
             width: 100px;
             font-weight: bold;
         }
-        .print-btn {
-            display: block;
-            width: 100%;
-            background: #1b5e20;
-            color: white;
-            border: none;
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .action-btn {
+            flex: 1;
             padding: 14px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             border-radius: 8px;
             cursor: pointer;
-            margin-top: 20px;
+            border: none;
             text-align: center;
+            color: white;
         }
+        .print-btn { background: #1b5e20; }
         .print-btn:hover { background: #2e7d32; }
+        .whatsapp-btn { background: #25d366; }
+        .whatsapp-btn:hover { background: #1ebe57; }
+        
         @media print {
-            .print-btn { display: none; }
+            .btn-group { display: none; }
             body { padding: 0; }
             .invoice-container { border: none; box-shadow: none; padding: 0; }
         }
     </style>
 </head>
 <body>
-    <div class="invoice-container">
+    <div class="invoice-container" id="printableArea">
         <div class="header-title">کۆمپانییا ئورگانیک جویس - قایما داواکری</div>
         <div class="header-date">دیرۆک و دەم: {{ current_date }}</div>
 
@@ -495,9 +501,35 @@ INVOICE_TEMPLATE = """
             </table>
         </div>
         {% endfor %}
-
-        <button class="print-btn" onclick="window.print()">🖨️ چاپکرن (Print / Save as PDF)</button>
     </div>
+
+    <div class="btn-group">
+        <button class="action-btn print-btn" onclick="window.print()">🖨️ چاپکرن / PDF</button>
+        <button class="action-btn whatsapp-btn" onclick="shareToWhatsApp()">💬 شێرکرن بۆ واتسئەپ</button>
+    </div>
+
+    <script>
+        function shareToWhatsApp() {
+            let text = "📋 *کۆمپانییا ئورگانیک جویس - قایما داواکری*\\n";
+            text += "📅 دیرۆک: {{ current_date }}\\n";
+            
+            {% if user_note %}
+            text += "📝 تێبینی: {{ user_note }}\\n";
+            {% endif %}
+            text += "----------------------------------\\n";
+
+            {% for cat_name, cat_items in categories.items() %}
+            text += "🔹 *بەش: {{ cat_name }}*\\n";
+            {% for item in cat_items %}
+            text += "▫️ {{ item.item_name }} : *{{ item.quantity }}* ({{ item.unit }})\\n";
+            {% endfor %}
+            text += "\\n";
+            {% endfor %}
+
+            let encodedText = encodeURIComponent(text);
+            window.open("https://wa.me/?text=" + encodedText, "_blank");
+        }
+    </script>
 </body>
 </html>
 """
