@@ -2,7 +2,7 @@ import os
 import sqlite3
 from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -281,7 +281,7 @@ HTML_TEMPLATE = """
     {% endfor %}
 
     <div class="order-summary" id="orderSummaryContainer" style="display: {% if orders %}block{% else %}none{% endif %};">
-        <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری:</h3>
+        <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری (قایمە):</h3>
         <table id="ordersTable">
             <thead>
                 <tr>
@@ -302,7 +302,7 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </tbody>
         </table>
-        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF</button>
+        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF (ئاسویی)</button>
         <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
 
@@ -486,8 +486,9 @@ class NumberedCanvas(canvas.Canvas):
         if os.path.exists(logo_path):
             self.saveState()
             if hasattr(self, 'setFillAlpha'):
-                self.setFillAlpha(0.12)
-            self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
+                self.setFillAlpha(0.10)
+            # Center of A4 Landscape (841 x 595 points)
+            self.drawImage(logo_path, 270, 147, width=300, height=300, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
 def get_device_id():
@@ -624,7 +625,7 @@ def download_pdf():
         return redirect(url_for('login'))
     
     device_id = get_device_id()
-    items_dict = get_all_items_dict()
+    orders = get_orders_list(device_id)
     user_note = get_note(device_id)
     
     font_font_name = 'Helvetica'
@@ -637,60 +638,58 @@ def download_pdf():
             except: continue
 
     pdf_filename = f"Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
+    # A4 Landscape: width = 841.89, height = 595.27
+    doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
-    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
-    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=9, fontName=font_font_name)
+    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
+    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
+    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
     
-    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
+    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
     
     if user_note:
         story.append(Spacer(1, 6))
         story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
         
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 15))
     
-    categories = ["فێقی", "مەعمەل", "مەغزەن"]
-    
-    table_headers = []
-    for cat in categories:
-        table_headers.append(Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style))
-    
-    max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
+    # Table headers for ordered items: Category, Item Name, Quantity, Unit
+    table_headers = [
+        Paragraph(f"<b>{reshape_text('بەش')}</b>", header_cell_style),
+        Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_cell_style),
+        Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_cell_style),
+        Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_cell_style)
+    ]
     
     table_data = [table_headers]
     
-    for i in range(max_rows):
-        row = []
-        for cat in categories:
-            items_in_cat = items_dict.get(cat, [])
-            if i < len(items_in_cat):
-                item_name, unit = items_in_cat[i]
-                text_cell = f"{reshape_text(item_name)} ({reshape_text(unit)})  ✓"
-                row.append(Paragraph(text_cell, cell_style))
-            else:
-                row.append(Paragraph("", cell_style))
+    for item in orders:
+        row = [
+            Paragraph(reshape_text(item["category"]), cell_style),
+            Paragraph(reshape_text(item["item_name"]), cell_style),
+            Paragraph(str(item["quantity"]), cell_style),
+            Paragraph(reshape_text(item["unit"]), cell_style)
+        ]
         table_data.append(row)
         
-    col_width = 560 / 3
-    col_widths = [col_width, col_width, col_width]
+    # Total printable width on landscape A4 with margins: 841.89 - 50 = ~791 points
+    col_widths = [180, 311, 150, 150]
     
     t = Table(table_data, colWidths=col_widths)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
         ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('TOPPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING', (0,0), (-1,-1), 6),
-        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+        ('RIGHTPADDING', (0,0), (-1,-1), 8),
     ]))
     
     story.append(t)
