@@ -17,6 +17,7 @@ app.secret_key = 'organic_juices_secret_key_2026'
 
 SHARED_PASSWORD = "organic123"
 
+# بنکەیا سەرەکی یا بابەتان (هەموو بەشەکان بێ کەموکوڕی)
 ALL_ITEMS = {
     "فيقي": [
         ("نافوكادو", "کیلو"), ("مانكو", "کیلو"), ("موز", "کارتۆن"), ("برتقال", "کیلو"),
@@ -41,6 +42,10 @@ ALL_ITEMS = {
         ("مساحه", "دانە"), ("فرجه", "دانە"), ("دسكورك", "دانە"), ("وره فه كاشير", "دانە"),
         ("بوكس فواكه", "دانە"), ("جتل", "دانە"), ("قباغ", "دانە"), ("كلاس تيست", "دانە"),
         ("جامسی", "دانە"), ("معتر جو", "دانە"), ("خارنا بالندا", "دانە")
+    ],
+    "تشتێن مەخسوس": [
+        ("بابەتێ نموونە ١", "دانە"),
+        ("بابەتێ نموونە ٢", "کیلو")
     ]
 }
 
@@ -102,7 +107,6 @@ LOGIN_TEMPLATE = """
             
             if (savedPass) {
                 document.getElementById("bioBtn").style.display = "block";
-                // ئەگەر پێشتر فەیس ئایدی گرێدرا بوو، بە خۆکارانە لە کاتی ڤەکرنا لاپەڕەی داوا دکەت
                 if (bioRegistered === "true") {
                     setTimeout(loginWithBiometric, 400);
                 }
@@ -128,7 +132,6 @@ LOGIN_TEMPLATE = """
                 if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
                     let available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
                     if (available) {
-                        // بانگکرنا فەیس ئایدی / پەنجەمۆرا سیستەما مۆبایلی
                         const challenge = new Uint8Array([19, 21, 31, 41, 51, 61, 71, 81]);
                         await navigator.credentials.create({
                             publicKey: {
@@ -149,11 +152,8 @@ LOGIN_TEMPLATE = """
                         });
                     }
                 }
-            } catch (e) {
-                // ئەگەر فەیس ئایدی سەرکەوت نەبوو یان یوزەر لێی پەشیمان بوو، تێپەڕین
-            }
+            } catch (e) {}
 
-            // ڤەگۆهاستنا بۆ ناڤ سیستەمی ب ڕەمزا پاشەکەوتکری
             let form = document.createElement("form");
             form.method = "POST";
             let input = document.createElement("input");
