@@ -2,21 +2,20 @@ import os
 import sqlite3
 from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
-# بو پاراستنا کارکرنا کوردی بێ خطە
 try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     import arabic_reshaper
     from bidi.algorithm import get_display
-    HAS_ARABIC_LIBS = True
+    PDF_AVAILABLE = True
 except ImportError:
-    HAS_ARABIC_LIBS = False
+    PDF_AVAILABLE = True
 
 app = Flask(__name__)
 app.secret_key = 'organic_juices_secret_key_2026'
@@ -24,84 +23,88 @@ app.secret_key = 'organic_juices_secret_key_2026'
 SHARED_PASSWORD = "organic123"
 
 def init_db():
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS orders
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  device_id TEXT,
-                  item_name TEXT,
-                  quantity REAL,
-                  unit TEXT,
-                  category TEXT)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS items
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  category TEXT,
-                  item_name TEXT,
-                  unit TEXT)''')
-                  
-    c.execute('''CREATE TABLE IF NOT EXISTS notes
-                 (device_id TEXT PRIMARY KEY,
-                  note_text TEXT)''')
-    
-    c.execute("SELECT COUNT(*) FROM items")
-    if c.fetchone()[0] == 0:
-        default_items = [
-            ("فێقی", "نافوكادو", "کیلو"), ("فێقی", "مانكو", "کیلو"), ("فێقی", "موز", "کارتۆن"), 
-            ("فێقی", "برتقال", "کیلو"), ("فێقی", "سف", "دانە"), ("فێقی", "ليمون", "کیلو"), 
-            ("فێقی", "جويزر", "کیلو"), ("فێقی", "جويز هند", "دانە"), ("فێقی", "هنار", "کیلو"), 
-            ("فێقی", "انه ناس", "لبان"), ("فێقی", "خوخ", "کیلو"), ("فێقی", "شاتو", "کیلو"), 
-            ("فێقی", "فه صب", "دانە"), ("فێقی", "سندی", "کیلو"), ("فێقی", "كوندور", "کیلو"), 
-            ("فێقی", "شوتی", "کیلو"), ("فێقی", "فراولا", "کیلو"), ("فێقی", "كیفی", "کیلو"), 
-            ("فێقی", "كاكی", "کیلو"), ("فێقی", "هیزیر", "کیلو"), ("فێقی", "هرميك", "کیلو"),
-            
-            ("مەعمەل", "خوخ", "کیلو"), ("مەعمەل", "مانكو", "کیلو"), ("مەعمەل", "شاتو", "کیلو"), 
-            ("مەعمەل", "انه ناس", "لبان"), ("مەعمەل", "شيرلوكو", "دانە"), ("مەعمەل", "بابه t + ii cm", "دانە"), 
-            ("مەعمەل", "تمرهندی مزن", "دانە"), ("مەعمەل", "تمرهندی بجيك", "دانە"), ("مەعمەل", "مویش مزن", "کیلو"), 
-            ("مەعمەل", "مویش بجيك", "کیلو"), ("مەعمەل", "به فر", "دانە"), ("مەعمەل", "ئاف", "دانە"), 
-            ("مەعمەل", "عصير حليك", "دانە"), ("مەعمەل", "عصير زنجبيل+مانكو", "دانە"), ("مەعمەل", "کرينجوس", "دانە"), 
-            ("مەعمەل", "باقركه ری بيستی", "دانە"), ("مەعمەل", "دزهو کردن", "دانە"),
-            
-            ("مەغزەن", "كلاس+قباغ", "دانە"), ("مەغزەن", "بطل مزن+قباغ", "دانە"), ("مەغزەن", "بطل بجيك+قباغ", "دانە"),
-            ("مەغزەن", "قصاب", "دانە"), ("مەغزەن", "كلينيس", "دانە"), ("مەغزەن", "بوكس (۲)", "دانە"), 
-            ("مەغزەن", "بوكس (٤)", "دانە"), ("مەغزەن", "بوكس (٦)", "دانە"), ("مەغزەن", "علاكه لوكو", "دانە"), 
-            ("مەغزەن", "علاكه زلال", "دانە"), ("مەغزەن", "زاهی", "دانە"), ("مەغزەن", "كليت", "دانە"), 
-            ("مەغزەن", "باس باس", "کیلو"), ("مەغزەن", "باته", "کیلو"), ("مەغزەن", "مساحه", "دانە"), 
-            ("مەغزەن", "فرجه", "دانە"), ("مەغزەن", "دسكورك", "دانە"), ("مەغزەن", "وره فه كاشير", "دانە"), 
-            ("مەغزەن", "بوكس فواكه", "دانە"), ("مەغزەن", "جتل", "دانە"), ("مەغزەن", "قباغ", "دانە"), 
-            ("مەغزەن", "كلاس تيست", "دانە"), ("مەغزەن", "جامسی", "دانە"), ("مەغزەن", "معتر جو", "دانە"), 
-            ("مەغزەن", "خارنا بالندا", "دانە")
-        ]
-        c.executemany("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", default_items)
-        conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS orders
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      device_id TEXT,
+                      item_name TEXT,
+                      quantity REAL,
+                      unit TEXT,
+                      category TEXT)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS items
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      category TEXT,
+                      item_name TEXT,
+                      unit TEXT)''')
+                      
+        c.execute('''CREATE TABLE IF NOT EXISTS notes
+                     (device_id TEXT PRIMARY KEY,
+                      note_text TEXT)''')
+        
+        c.execute("SELECT COUNT(*) FROM items")
+        if c.fetchone()[0] == 0:
+            default_items = [
+                ("فێقی", "نافوكادو", "کیلو"), ("فێقی", "مانكو", "کیلو"), ("فێقی", "موز", "کارتۆن"), 
+                ("فێقی", "برتقال", "کیلو"), ("فێقی", "سف", "دانە"), ("فێقی", "ليمون", "کیلو"), 
+                ("فێقی", "جويزر", "کیلو"), ("فێقی", "جويز هند", "دانە"), ("فێقی", "هنار", "کیلو"), 
+                ("فێقی", "انه ناس", "لبان"), ("فێقی", "خوخ", "کیلو"), ("فێقی", "شاتو", "کیلو"), 
+                ("فێقی", "فه صب", "دانە"), ("فێقی", "سندی", "کیلو"), ("فێقی", "كوندور", "کیلو"), 
+                ("فێقی", "شوتی", "کیلو"), ("فێقی", "فراولا", "کیلو"), ("فێقی", "كیفی", "کیلو"), 
+                ("فێقی", "كاكی", "کیلو"), ("فێقی", "هیزیر", "کیلو"), ("فێقی", "هرميك", "کیلو"),
+                
+                ("مەعمەل", "خوخ", "کیلو"), ("مەعمەل", "مانكو", "کیلو"), ("مەعمەل", "شاتو", "کیلو"), 
+                ("مەعمەل", "انه ناس", "لبان"), ("مەعمەل", "شيرلوكو", "دانە"), ("مەعمەل", "بابه t + ii cm", "دانە"), 
+                ("مەعمەل", "تمرهندی مزن", "دانە"), ("مەعمەل", "تمرهندی بجيك", "دانە"), ("مەعمەل", "مویش مزن", "کیلو"), 
+                ("مەعمەل", "مویش بجيك", "کیلو"), ("مەعمەل", "به فر", "دانە"), ("مەعمەل", "ئاف", "دانە"), 
+                ("مەعمەل", "عصير حليك", "دانە"), ("مەعمەل", "عصير زنجبيل+مانكو", "دانە"), ("مەعمەل", "کرينجوس", "دانە"), 
+                ("مەعمەل", "باقركه ری بيستی", "دانە"), ("مەعمەل", "دزهو کردن", "دانە"),
+                
+                ("مەغزەن", "كلاس+قباغ", "دانە"), ("مەغزەن", "بطل مزن+قباغ", "دانە"), ("مەغزەن", "بطل بجيك+قباغ", "دانە"),
+                ("مەغزەن", "قصاب", "دانە"), ("مەغزەن", "كلينيس", "دانە"), ("مەغزەن", "بوكس (۲)", "دانە"), 
+                ("مەغزەن", "بوكس (٤)", "دانە"), ("مەغزەن", "بوكس (٦)", "دانە"), ("مەغزەن", "علاكه لوكو", "دانە"), 
+                ("مەغزەن", "علاكه زلال", "دانە"), ("مەغزەن", "زاهی", "دانە"), ("مەغزەن", "كليت", "دانە"), 
+                ("مەغزەن", "باس باس", "کیلو"), ("مەغزەن", "باته", "کیلو"), ("مەغزەن", "مساحه", "دانە"), 
+                ("مەغزەن", "فرجه", "دانە"), ("مەغزەن", "دسكورك", "دانە"), ("مەغزەن", "وره فه كاشير", "دانە"), 
+                ("مەغزەن", "بوكس فواكه", "دانە"), ("مەغزەن", "جتل", "دانە"), ("مەغزەن", "قباغ", "دانە"), 
+                ("مەغزەن", "كلاس تيست", "دانە"), ("مەغزەن", "جامسی", "دانە"), ("مەغزەن", "معتر جو", "دانە"), 
+                ("مەغزەن", "خارنا بالندا", "دانە")
+            ]
+            c.executemany("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", default_items)
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print("DB Init Error:", e)
 
 init_db()
 
 def get_all_items_dict():
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT category, item_name, unit FROM items")
-    rows = c.fetchall()
-    conn.close()
-    
-    items_dict = {}
-    for cat, name, unit in rows:
-        if cat not in items_dict:
-            items_dict[cat] = []
-        items_dict[cat].append((name, unit))
-    return items_dict
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("SELECT category, item_name, unit FROM items")
+        rows = c.fetchall()
+        conn.close()
+        
+        items_dict = {}
+        for cat, name, unit in rows:
+            if cat not in items_dict:
+                items_dict[cat] = []
+            items_dict[cat].append((name, unit))
+        return items_dict
+    except:
+        return {}
 
 def reshape_text(text):
     if not text:
         return ""
-    if HAS_ARABIC_LIBS:
-        try:
-            reshaped = arabic_reshaper.reshape(str(text))
-            return get_display(reshaped)
-        except:
-            return str(text)
-    return str(text)
+    try:
+        reshaped = arabic_reshaper.reshape(str(text))
+        return get_display(reshaped)
+    except:
+        return str(text)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -496,16 +499,16 @@ class NumberedCanvas(canvas.Canvas):
             super().showPage()
         super().save()
     def draw_page_decorations(self):
-        logo_path = os.path.join(os.getcwd(), 'logo.png')
-        if os.path.exists(logo_path):
-            try:
+        try:
+            logo_path = os.path.join(os.getcwd(), 'logo.png')
+            if os.path.exists(logo_path):
                 self.saveState()
                 if hasattr(self, 'setFillAlpha'):
                     self.setFillAlpha(0.15)
                 self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
                 self.restoreState()
-            except:
-                pass
+        except:
+            pass
 
 def get_device_id():
     if 'device_id' not in session:
@@ -513,31 +516,39 @@ def get_device_id():
     return session['device_id']
 
 def get_note(device_id):
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT note_text FROM notes WHERE device_id = ?", (device_id,))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else ""
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("SELECT note_text FROM notes WHERE device_id = ?", (device_id,))
+        row = c.fetchone()
+        conn.close()
+        return row[0] if row else ""
+    except:
+        return ""
 
 def get_orders_list(device_id):
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-    rows = c.fetchall()
-    conn.close()
-    return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
+        rows = c.fetchall()
+        conn.close()
+        return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
+    except:
+        return []
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    error = None
     if request.method == 'POST':
         password = request.form.get('password', '')
         if password != SHARED_PASSWORD:
-            return render_template_string(LOGIN_TEMPLATE, error="ڕەمزی گشتی هەڵەیە!")
-        session['authenticated'] = True
-        get_device_id()
-        return redirect(url_for('index'))
-    return render_template_string(LOGIN_TEMPLATE)
+            error = "ڕەمزی گشتی هەڵەیە!"
+        else:
+            session['authenticated'] = True
+            get_device_id()
+            return redirect(url_for('index'))
+    return render_template_string(LOGIN_TEMPLATE, error=error)
 
 @app.route('/logout')
 def logout():
@@ -561,22 +572,28 @@ def save_note():
         return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     note_text = request.form.get('note', '')
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO notes (device_id, note_text) VALUES (?, ?)", (device_id, note_text))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "success"})
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO notes (device_id, note_text) VALUES (?, ?)", (device_id, note_text))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/settings')
 def settings_page():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT id, category, item_name, unit FROM items ORDER BY category, id DESC")
-    rows = c.fetchall()
-    conn.close()
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("SELECT id, category, item_name, unit FROM items ORDER BY category, id DESC")
+        rows = c.fetchall()
+        conn.close()
+    except:
+        rows = []
     return render_template_string(SETTINGS_TEMPLATE, all_items_list=rows)
 
 @app.route('/add_item_setting', methods=['POST'])
@@ -588,52 +605,67 @@ def add_item_setting():
     unit = request.form.get('unit')
     
     if category and item_name and unit:
-        conn = sqlite3.connect("clean_qayma.db")
-        c = conn.cursor()
-        c.execute("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", (category, item_name, unit))
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect("clean_qayma.db")
+            c = conn.cursor()
+            c.execute("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", (category, item_name, unit))
+            conn.commit()
+            conn.close()
+        except:
+            pass
     return redirect(url_for('settings_page'))
 
 @app.route('/delete_item_setting/<int:item_id>')
 def delete_item_setting(item_id):
     if not session.get('authenticated'):
         return redirect(url_for('login'))
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM items WHERE id = ?", (item_id,))
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        conn.commit()
+        conn.close()
+    except:
+        pass
     return redirect(url_for('settings_page'))
 
 @app.route('/logo.png')
 def get_logo():
-    return send_from_directory(os.getcwd(), 'logo.png')
+    try:
+        return send_from_directory(os.getcwd(), 'logo.png')
+    except:
+        return "", 404
 
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
     if not session.get('authenticated'):
         return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO orders (device_id, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
-              (device_id, request.form['item_name'], float(request.form['quantity']), request.form['unit'], request.form['category']))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "success", "orders": get_orders_list(device_id)})
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("INSERT INTO orders (device_id, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
+                  (device_id, request.form['item_name'], float(request.form['quantity']), request.form['unit'], request.form['category']))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "orders": get_orders_list(device_id)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
         return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM orders WHERE device_id = ?", (device_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "success", "orders": []})
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("DELETE FROM orders WHERE device_id = ?", (device_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "orders": []})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/download_pdf')
 def download_pdf():
