@@ -20,6 +20,8 @@ SHARED_PASSWORD = "organic123"
 def init_db():
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
+    
+    # Check and create orders table with all necessary columns
     c.execute('''CREATE TABLE IF NOT EXISTS orders
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   device_id TEXT,
@@ -28,16 +30,25 @@ def init_db():
                   unit TEXT,
                   category TEXT)''')
     
+    # Check and create items table
     c.execute('''CREATE TABLE IF NOT EXISTS items
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   category TEXT,
                   item_name TEXT,
                   unit TEXT)''')
                   
+    # Check and create notes table
     c.execute('''CREATE TABLE IF NOT EXISTS notes
                  (device_id TEXT PRIMARY KEY,
                   note_text TEXT)''')
     
+    # Safe columns check for existing databases
+    for table, col, col_type in [('orders', 'category', 'TEXT'), ('orders', 'unit', 'TEXT'), ('orders', 'quantity', 'REAL')]:
+        try:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass # Column already exists
+
     c.execute("SELECT COUNT(*) FROM items")
     if c.fetchone()[0] == 0:
         default_items = [
@@ -89,8 +100,11 @@ def get_all_items_dict():
 def reshape_text(text):
     if not text:
         return ""
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped)
+    try:
+        reshaped = arabic_reshaper.reshape(str(text))
+        return get_display(reshaped)
+    except:
+        return str(text)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -615,7 +629,7 @@ def quick_add_ajax():
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}}, 401
+        return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
