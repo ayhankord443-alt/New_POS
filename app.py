@@ -89,8 +89,13 @@ def get_all_items_dict():
 def reshape_text(text):
     if not text:
         return ""
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped)
+    try:
+        # چارەسەریا تەمام بۆ ڕێکخستنا پیتێن کوردی و عەرەبی ل ناڤ پەڕەیێن PDF
+        reshaped_text = arabic_reshaper.reshape(str(text))
+        bidi_text = get_display(reshaped_text)
+        return bidi_text
+    except Exception:
+        return str(text)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -407,7 +412,6 @@ HTML_TEMPLATE = """
                         files: [file]
                     });
                 } else {
-                    // ئەگەر جارا شارکرنا فایلان نەکەفتە کار، ڕوخسەتێ ددەین ب رێکا فایلا پی دی ئێف بگوستیت
                     let url = URL.createObjectURL(blob);
                     let a = document.createElement('a');
                     a.href = url;
@@ -520,7 +524,6 @@ class NumberedCanvas(canvas.Canvas):
             self.saveState()
             if hasattr(self, 'setFillAlpha'):
                 self.setFillAlpha(0.08)
-            # لۆگۆ ڕاستەوخۆ هاتە دانان د نێڤەکا (Center) پەڕەی دا ب قەبارەیەکێ زۆر جوان
             self.drawImage(logo_path, 238, 70, width=350, height=350, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
@@ -688,13 +691,13 @@ def download_pdf():
     cell_center_style = ParagraphStyle('CCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name)
     cell_left_style = ParagraphStyle('CLS', parent=styles['Normal'], alignment=0, fontSize=10, fontName=font_font_name)
     
-    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری فەرمی')}</b>", title_style))
+    story.append(Paragraph(reshape_text("کۆمپانییا ئورگانیک جویس - قایما داواکری فەرمی"), title_style))
     story.append(Spacer(1, 4))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
     
     if user_note:
         story.append(Spacer(1, 8))
-        story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
+        story.append(Paragraph(reshape_text("تێبینی: " + user_note), note_style))
         
     story.append(Spacer(1, 12))
     
@@ -709,7 +712,7 @@ def download_pdf():
     
     for cat_name, cat_items in categories.items():
         cat_story = []
-        cat_story.append(Paragraph(f"<b>{reshape_text('بەش: ')}{reshape_text(cat_name)}</b>", section_heading_style))
+        cat_story.append(Paragraph(reshape_text("بەش: " + cat_name), section_heading_style))
         
         table_headers = [
             Paragraph(reshape_text("بابەت"), header_right_style),
