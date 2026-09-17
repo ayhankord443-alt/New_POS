@@ -643,7 +643,7 @@ def download_pdf():
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
     section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
     
-    # Correct alignments & logical order for true RTL table columns: [بابەت (Right), بڕ (Center), یەکە (Left)]
+    # Text styles without double reshaping to keep words completely normal and natural
     header_right_style = ParagraphStyle('HRS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     header_center_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     header_left_style = ParagraphStyle('HLS', parent=styles['Normal'], alignment=0, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
@@ -668,27 +668,26 @@ def download_pdf():
             categories[cat] = []
         categories[cat].append(item)
     
-    # Perfectly balanced widths across A4 Landscape width (741 printable points: 300 + 221 + 220)
     col_widths = [300, 221, 220] 
     
     for cat_name, cat_items in categories.items():
         cat_story = []
         cat_story.append(Paragraph(f"<b>{reshape_text('بەش: ')}{reshape_text(cat_name)}</b>", section_heading_style))
         
-        # Order columns explicitly matching RTL display: Item (Right), Quantity (Middle), Unit (Left)
+        # Raw text without reshape_text since ReportLab handles standard unicode strings correctly when alignment and font are set right.
         table_headers = [
-            Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_right_style),
-            Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_center_style),
-            Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_left_style)
+            Paragraph("<b>بابەت</b>", header_right_style),
+            Paragraph("<b>بڕ</b>", header_center_style),
+            Paragraph("<b>یەکە</b>", header_left_style)
         ]
         
         table_data = [table_headers]
         
         for item in cat_items:
             row = [
-                Paragraph(reshape_text(item["item_name"]), cell_right_style),
+                Paragraph(str(item["item_name"]), cell_right_style),
                 Paragraph(str(item["quantity"]), cell_center_style),
-                Paragraph(reshape_text(item["unit"]), cell_left_style)
+                Paragraph(str(item["unit"]), cell_left_style)
             ]
             table_data.append(row)
             
