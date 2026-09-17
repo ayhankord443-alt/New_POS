@@ -506,14 +506,6 @@ def get_note(device_id):
     conn.close()
     return row[0] if row else ""
 
-def get_orders_list(device_id):
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-    rows = c.fetchall()
-    conn.close()
-    return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -535,8 +527,14 @@ def index():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
     device_id = get_device_id()
-    raw_orders = get_orders_list(device_id)
-    tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
+    
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
+    rows = c.fetchall()
+    conn.close()
+    
+    tuple_orders = [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
     items_dict = get_all_items_dict()
     current_note = get_note(device_id)
     return render_template_string(HTML_TEMPLATE, all_items=items_dict, orders=tuple_orders, current_note=current_note)
@@ -606,13 +604,18 @@ def quick_add_ajax():
     c.execute("INSERT INTO orders (device_id, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
               (device_id, request.form['item_name'], float(request.form['quantity']), request.form['unit'], request.form['category']))
     conn.commit()
+    
+    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
+    rows = c.fetchall()
     conn.close()
-    return jsonify({"status": "success", "orders": get_orders_list(device_id)})
+    
+    orders_list = [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
+    return jsonify({"status": "success", "orders": orders_list})
 
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+        return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -627,7 +630,6 @@ def download_pdf():
         return redirect(url_for('login'))
     
     device_id = get_device_id()
-    items_dict = get_all_items_dict()
     user_note = get_note(device_id)
     
     font_font_name = 'Helvetica'
@@ -640,7 +642,7 @@ def download_pdf():
             except: continue
 
     pdf_filename = f"Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     
@@ -658,53 +660,40 @@ def download_pdf():
         
     story.append(Spacer(1, 10))
     
-    categories = ["فێقی", "مەعمەل", "مەغزەن"]
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("SELECT item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
+    order_rows = c.fetchall()
+    conn.close()
     
-    table_headers = []
-    for cat in categories:
-        table_headers.append(Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style))
-    
-    max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
+    table_headers = [
+        Paragraph(f"<b>{reshape_text('بەش')}</b>", header_cell_style),
+        Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_cell_style),
+        Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_cell_style),
+        Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_cell_style)
+    ]
     
     table_data = [table_headers]
-    
-    for i in range(max_rows):
-        row = []
-        for cat in categories:
-            items_in_cat = items_dict.get(cat, [])
-            if i < len(items_in_cat):
-                item_name, unit = items_in_cat[i]
-                
-                name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_font_name, fontSize=9, alignment=2))
-                unit_para = Paragraph(f"<font color='#666'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_font_name, fontSize=8, alignment=0))
-                
-                cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
-                cell_table.setStyle(TableStyle([
-                    ('ALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), 0),
-                ]))
-                row.append(cell_table)
-            else:
-                row.append(Paragraph("", header_cell_style))
+    for item_name, quantity, unit, category in order_rows:
+        row = [
+            Paragraph(reshape_text(category), ParagraphStyle('C1', fontName=font_font_name, fontSize=10, alignment=1)),
+            Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('C2', fontName=font_font_name, fontSize=10, alignment=1)),
+            Paragraph(str(quantity), ParagraphStyle('C3', fontName=font_font_name, fontSize=10, alignment=1)),
+            Paragraph(reshape_text(unit), ParagraphStyle('C4', fontName=font_font_name, fontSize=10, alignment=1))
+        ]
         table_data.append(row)
         
-    col_width = 560 / 3
-    col_widths = [col_width, col_width, col_width]
-    
-    t = Table(table_data, colWidths=col_widths)
+    if len(order_rows) == 0:
+        table_data.append([Paragraph(reshape_text("چ بابەتەک نەهاتینە زێدەکرن"), ParagraphStyle('C0', fontName=font_font_name, fontSize=10, alignment=1)), "", "", ""])
+
+    t = Table(table_data, colWidths=[120, 200, 100, 110])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-        ('TOPPADDING', (0,0), (-1,-1), 3),
-        ('LEFTPADDING', (0,0), (-1,-1), 4),
-        ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
     ]))
     
     story.append(t)
