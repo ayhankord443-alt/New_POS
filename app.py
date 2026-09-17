@@ -17,24 +17,24 @@ app.secret_key = 'organic_juices_secret_key_2026'
 
 SHARED_PASSWORD = "organic123"
 
-# بنکەیا سەرەکی یا بابەتان (هەموو بەشەکان بێ کەموکوڕی)
+# بنکەیا سەرەکی یا بابەتان (جودا بۆ هەر بەشەکی - دەتوانیت خیار یا هەر تشتەکێ دی لێرە زێدە بکەی)
 ALL_ITEMS = {
-    "فيقي": [
-        ("نافوكادو", "کیلو"), ("مانكو", "کیلو"), ("موز", "کارتۆن"), ("برتقال", "کیلو"),
-        ("سف", "دانە"), ("ليمون", "کیلو"), ("جويزر", "کیلو"), ("جويز هند", "دانە"),
-        ("هنار", "کیلو"), ("انه ناس", "لبان"), ("خوخ", "کیلو"), ("شاتو", "کیلو"),
-        ("فه صب", "دانە"), ("سندی", "کیلو"), ("كوندور", "کیلو"), ("شوتی", "کیلو"),
-        ("فراولا", "کیلو"), ("كیفی", "کیلو"), ("كاكی", "کیلو"), ("هیزیر", "کیلو"),
-        ("هرميك", "کیلو")
+    "فێقی": [
+        ("خیار", "کیلو"), ("نافوكادو", "کیلو"), ("مانكو", "کیلو"), ("موز", "کارتۆن"), 
+        ("برتقال", "کیلو"), ("سف", "دانە"), ("ليمون", "کیلو"), ("جويزر", "کیلو"), 
+        ("جويز هند", "دانە"), ("هنار", "کیلو"), ("انه ناس", "لبان"), ("خوخ", "کیلو"), 
+        ("شاتو", "کیلو"), ("فه صب", "دانە"), ("سندی", "کیلو"), ("كوندور", "کیلو"), 
+        ("شوتی", "کیلو"), ("فراولا", "کیلو"), ("كیفی", "کیلو"), ("كاكی", "کیلو"), 
+        ("هیزیر", "کیلو"), ("هرميك", "کیلو")
     ],
-    "معمل": [
+    "مەعمەل": [
         ("خوخ", "کیلو"), ("مانكو", "کیلو"), ("شاتو", "کیلو"), ("انه ناس", "لبان"),
         ("شيرلوكو", "دانە"), ("بابه ت + ii cm", "دانە"), ("تمرهندی مزن", "دانە"),
         ("تمرهندی بجيك", "دانە"), ("مویش مزن", "کیلو"), ("مویش بجيك", "کیلو"),
         ("به فر", "دانە"), ("ئاف", "دانە"), ("عصير حليك", "دانە"), ("عصير زنجبيل+مانكو", "دانە"),
         ("کرينجوس", "دانە"), ("باقركه ری بيستی", "دانە"), ("دزهو کردن", "دانە")
     ],
-    "مغزن": [
+    "مەغزەن": [
         ("كلاس+قباغ", "دانە"), ("بطل مزن+قباغ", "دانە"), ("بطل بجيك+قباغ", "دانە"),
         ("قصاب", "دانە"), ("كلينيس", "دانە"), ("بوكس (۲)", "دانە"), ("بوكس (٤)", "دانە"),
         ("بوكس (٦)", "دانە"), ("علاكه لوكو", "دانە"), ("علاكه زلال", "دانە"),
@@ -104,15 +104,11 @@ LOGIN_TEMPLATE = """
         document.addEventListener("DOMContentLoaded", async () => {
             let savedPass = localStorage.getItem("organic_saved_pass");
             let bioRegistered = localStorage.getItem("organic_bio_registered");
-            
             if (savedPass) {
                 document.getElementById("bioBtn").style.display = "block";
-                if (bioRegistered === "true") {
-                    setTimeout(loginWithBiometric, 400);
-                }
+                if (bioRegistered === "true") { setTimeout(loginWithBiometric, 400); }
             }
         });
-
         document.getElementById("loginForm").addEventListener("submit", () => {
             let pass = document.getElementById("passwordInput").value;
             if(pass) {
@@ -120,14 +116,9 @@ LOGIN_TEMPLATE = """
                 localStorage.setItem("organic_bio_registered", "true");
             }
         });
-
         async function loginWithBiometric() {
             let savedPass = localStorage.getItem("organic_saved_pass");
-            if (!savedPass) {
-                alert("تکایە سەرەتا جارەکێ بە ڕەمز بچۆ ژوورەوە!");
-                return;
-            }
-
+            if (!savedPass) return;
             try {
                 if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
                     let available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -136,30 +127,20 @@ LOGIN_TEMPLATE = """
                         await navigator.credentials.create({
                             publicKey: {
                                 rp: { name: "Organic Juices Cashier" },
-                                user: {
-                                    id: new Uint8Array([1, 2, 3, 4, 5]),
-                                    name: "cashier",
-                                    displayName: "Organic Cashier"
-                                },
+                                user: { id: new Uint8Array([1, 2, 3, 4, 5]), name: "cashier", displayName: "Organic Cashier" },
                                 challenge: challenge,
                                 pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
                                 timeout: 60000,
-                                authenticatorSelection: { 
-                                    authenticatorAttachment: "platform", 
-                                    userVerification: "required" 
-                                }
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" }
                             }
                         });
                     }
                 }
             } catch (e) {}
-
             let form = document.createElement("form");
             form.method = "POST";
             let input = document.createElement("input");
-            input.type = "hidden";
-            input.name = "password";
-            input.value = savedPass;
+            input.type = "hidden"; input.name = "password"; input.value = savedPass;
             form.appendChild(input);
             document.body.appendChild(form);
             form.submit();
@@ -207,21 +188,23 @@ HTML_TEMPLATE = """
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 25px; 
+            margin-bottom: 20px; 
             padding-bottom: 10px;
             border-bottom: 3px solid #2e7d32;
         }
-        .brand-header h1 { margin: 0; font-size: 22px; font-weight: 900; color: #1b5e20; }
-        .user-panel { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+        .brand-header h1 { margin: 0; font-size: 20px; font-weight: 900; color: #1b5e20; }
+        .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
         .logout-btn { background-color: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
-        .section-title { text-align: right; margin: 20px 5px 10px 5px; color: #2e7d32; font-size: 19px; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 4px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .item-card { background: #ffffff; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
-        .item-name { font-weight: bold; font-size: 13px; margin-bottom: 3px; color: #111; }
+        .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
         .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
-        .btn-group { display: flex; gap: 4px; align-items: center; }
-        .qty-input { width: 38px; padding: 4px 2px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
-        .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 2px; border-radius: 4px; flex: 1; font-weight: bold; font-size: 12px; cursor: pointer; }
+        .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
+        .qty-btn { background: #e0e0e0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; color: #333; }
+        .qty-btn:active { background: #ccc; }
+        .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
+        .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
         .btn-add.added { background: #388e3c; transform: scale(0.96); }
         .order-summary { background: #ffffff; border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
         .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
@@ -253,8 +236,10 @@ HTML_TEMPLATE = """
                     <input type="hidden" name="item_name" value="{{ item_name }}">
                     <input type="hidden" name="unit" value="{{ unit }}">
                     <input type="hidden" name="category" value="{{ cat }}">
-                    <input type="number" name="quantity" value="1" step="any" class="qty-input">
-                    <button type="submit" class="btn-add">+ زێدەکه</button>
+                    <button type="button" class="qty-btn" onclick="adjustQty(this, -1)">-</button>
+                    <input type="number" name="quantity" value="1" step="any" class="qty-input" id="qty_{{ loop.index0 }}_{{ cat }}">
+                    <button type="button" class="qty-btn" onclick="adjustQty(this, 1)">+</button>
+                    <button type="submit" class="btn-add">زێدەکه</button>
                 </form>
             </div>
             {% endfor %}
@@ -288,6 +273,14 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        function adjustQty(btn, amount) {
+            let input = btn.parentElement.querySelector('.qty-input');
+            let currentVal = parseFloat(input.value) || 1;
+            let newVal = currentVal + amount;
+            if (newVal < 0.1) newVal = 0.1;
+            input.value = newVal;
+        }
+
         async function quickAddAjax(event, form) {
             event.preventDefault();
             let formData = new FormData(form);
@@ -392,11 +385,9 @@ def login():
         password = request.form.get('password', '')
         if password != SHARED_PASSWORD:
             return render_template_string(LOGIN_TEMPLATE, error="ڕەمزی گشتی هەڵەیە!")
-        
         session['authenticated'] = True
         get_device_id()
         return redirect(url_for('index'))
-        
     return render_template_string(LOGIN_TEMPLATE)
 
 @app.route('/logout')
