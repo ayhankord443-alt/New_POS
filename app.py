@@ -645,8 +645,15 @@ def download_pdf():
     subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
     section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
-    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
+    
+    # Correct alignments for RTL columns: Column 0 is right (İtem), Column 1 is center (Quantity), Column 2 is left (Unit)
+    header_right_style = ParagraphStyle('HRS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    header_center_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    header_left_style = ParagraphStyle('HLS', parent=styles['Normal'], alignment=0, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+
+    cell_right_style = ParagraphStyle('CRS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
+    cell_center_style = ParagraphStyle('CCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name)
+    cell_left_style = ParagraphStyle('CLS', parent=styles['Normal'], alignment=0, fontSize=10, fontName=font_font_name)
     
     story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
@@ -665,25 +672,26 @@ def download_pdf():
             categories[cat] = []
         categories[cat].append(item)
     
-    col_widths = [311, 240, 240] # Total width ~ 791 points
+    # Correct column widths matching RTL order: [Item (Right), Quantity (Center), Unit (Left)] -> Total width = 791 points
+    col_widths = [350, 221, 220] 
     
     for cat_name, cat_items in categories.items():
         cat_story = []
         cat_story.append(Paragraph(f"<b>{reshape_text('بەش: ')}{reshape_text(cat_name)}</b>", section_heading_style))
         
         table_headers = [
-            Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_cell_style),
-            Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_cell_style),
-            Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_cell_style)
+            Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_right_style),
+            Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_center_style),
+            Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_left_style)
         ]
         
         table_data = [table_headers]
         
         for item in cat_items:
             row = [
-                Paragraph(reshape_text(item["item_name"]), cell_style),
-                Paragraph(str(item["quantity"]), cell_style),
-                Paragraph(reshape_text(item["unit"]), cell_style)
+                Paragraph(reshape_text(item["item_name"]), cell_right_style),
+                Paragraph(str(item["quantity"]), cell_center_style),
+                Paragraph(reshape_text(item["unit"]), cell_left_style)
             ]
             table_data.append(row)
             
