@@ -548,10 +548,10 @@ def download_pdf():
                 items_in_cat = items_dict.get(cat, [])
                 if i < len(items_in_cat):
                     item_name, unit = items_in_cat[i]
-                    name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=9, alignment=2))
-                    unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=8, alignment=0))
+                    name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=8, alignment=2))
+                    unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=7, alignment=0))
                     
-                    cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
+                    cell_table = Table([[name_para, unit_para]], colWidths=[120, 60])
                     cell_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
                     row.append(cell_table)
                 else:
@@ -560,7 +560,7 @@ def download_pdf():
             
         col_width = 560 / 3
         t = Table(table_data, colWidths=[col_width, col_width, col_width])
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0,0), (-1,-1), 3), ('TOPPADDING', (0,0), (-1,-1), 3), ('LEFTPADDING', (0,0), (-1,-1), 4), ('RIGHTPADDING', (0,0), (-1,-1), 4)]))
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0,0), (-1,-1), 2), ('TOPPADDING', (0,0), (-1,-1), 2), ('LEFTPADDING', (0,0), (-1,-1), 2), ('RIGHTPADDING', (0,0), (-1,-1), 2)]))
         
         story.append(t)
         doc.build(story, canvasmaker=WatermarkCanvas)
