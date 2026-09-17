@@ -235,8 +235,12 @@ HTML_TEMPLATE = """
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
         .btn-add.added { background: #388e3c; transform: scale(0.96); }
         .order-summary { background: #ffffff; border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
-        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
+        
+        .action-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; }
+        .whatsapp-btn { background: #25D366; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; text-decoration: none; box-sizing: border-box; }
         .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; font-size: 13px; }
         th { background-color: #f5f5f5; color: #2e7d32; }
@@ -300,7 +304,12 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </tbody>
         </table>
-        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF (ئاسویی)</button>
+        
+        <div class="action-btns">
+            <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF (فەرمی و ئاسویی)</button>
+            <a href="#" id="whatsappShareBtn" class="whatsapp-btn" onclick="shareViaWhatsApp(event)">💬 شێرکرن بۆ واتسئەپ (PDF / فەرمی)</a>
+        </div>
+        
         <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
 
@@ -373,7 +382,7 @@ HTML_TEMPLATE = """
                 let blob = await response.blob();
                 let file = new File([blob], "Organic_Juices_Qayma.pdf", { type: "application/pdf" });
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ title: 'پسولتا فرۆتنێ', text: 'فەرموو پسولتا تە یا ئۆرگانیک جویس', files: [file] });
+                    await navigator.share({ title: 'پسولتا فرۆتنێ', text: 'فەرموو پسولتا تە یا ئۆرگانیک جویس ب شێوەیەکێ فەرمی', files: [file] });
                 } else {
                     let url = URL.createObjectURL(blob);
                     let a = document.createElement('a');
@@ -382,6 +391,33 @@ HTML_TEMPLATE = """
                     a.click();
                 }
             } catch (error) { window.location.href = '/download_pdf'; }
+        }
+
+        async function shareViaWhatsApp(event) {
+            event.preventDefault();
+            try {
+                let response = await fetch('/download_pdf');
+                let blob = await response.blob();
+                let file = new File([blob], "Organic_Juices_Qayma.pdf", { type: "application/pdf" });
+                
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'قایما کۆمپانییا ئۆرگانیک جویس',
+                        text: 'فەرموو قایما فەرمییا کۆمپانییا ئورگانیک جویس.',
+                        files: [file]
+                    });
+                } else {
+                    // ئەگەر جارا شارکرنا فایلان نەکەفتە کار، ڕوخسەتێ ددەین ب رێکا فایلا پی دی ئێف بگوستیت
+                    let url = URL.createObjectURL(blob);
+                    let a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Organic_Juices_Qayma.pdf';
+                    a.click();
+                    alert('فایلا PDF هاتە داگرتن. نها دشێی ل واتسئەپی وەک فایلە کا فەرمی بێرەکی.');
+                }
+            } catch (e) {
+                window.location.href = '/download_pdf';
+            }
         }
     </script>
 </body>
@@ -484,7 +520,8 @@ class NumberedCanvas(canvas.Canvas):
             self.saveState()
             if hasattr(self, 'setFillAlpha'):
                 self.setFillAlpha(0.08)
-            self.drawImage(logo_path, 270, 147, width=300, height=300, preserveAspectRatio=True, mask='auto')
+            # لۆگۆ ڕاستەوخۆ هاتە دانان د نێڤەکا (Center) پەڕەی دا ب قەبارەیەکێ زۆر جوان
+            self.drawImage(logo_path, 238, 70, width=350, height=350, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
 def get_device_id():
@@ -634,16 +671,15 @@ def download_pdf():
             except: continue
 
     pdf_filename = f"Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=25, bottomMargin=25)
     story = []
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=22, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
-    section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
+    section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=12, spaceAfter=6)
     
-    # لێرەدا چارەسەرا ڕاستکردنا فۆنتی هاتییە کرن داكو پەیڤ و ڕستە ب شێوەیەکێ دروست و سروشتی بچنە ناو فایلا PDFێ بێ سەروبن بوون
     header_right_style = ParagraphStyle('HRS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     header_center_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     header_left_style = ParagraphStyle('HLS', parent=styles['Normal'], alignment=0, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
@@ -652,14 +688,15 @@ def download_pdf():
     cell_center_style = ParagraphStyle('CCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name)
     cell_left_style = ParagraphStyle('CLS', parent=styles['Normal'], alignment=0, fontSize=10, fontName=font_font_name)
     
-    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری')}</b>", title_style))
+    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری فەرمی')}</b>", title_style))
+    story.append(Spacer(1, 4))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
     
     if user_note:
         story.append(Spacer(1, 8))
         story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
         
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
     
     categories = {}
     for item in orders:
@@ -668,7 +705,7 @@ def download_pdf():
             categories[cat] = []
         categories[cat].append(item)
     
-    col_widths = [300, 221, 220] 
+    col_widths = [320, 210, 206] 
     
     for cat_name, cat_items in categories.items():
         cat_story = []
