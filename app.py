@@ -2,15 +2,6 @@ import os
 import sqlite3
 from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-import arabic_reshaper
-from bidi.algorithm import get_display
 
 app = Flask(__name__)
 app.secret_key = 'organic_juices_secret_key_2026'
@@ -85,12 +76,6 @@ def get_all_items_dict():
             items_dict[cat] = []
         items_dict[cat].append((name, unit))
     return items_dict
-
-def reshape_text(text):
-    if not text:
-        return ""
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -252,7 +237,7 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="note-box">
-        <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر PDF و لیستێ دێ دیار بیت):</label>
+        <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر فۆرماتێ دێ دیار بیت):</label>
         <textarea id="noteInput" placeholder="تێبینییا خۆ لێرە بنڤیسە...">{{ current_note }}</textarea>
         <button type="button" class="note-save-btn" onclick="saveNote()">تومارکرنا تێبینیێ</button>
     </div>
@@ -300,7 +285,7 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </tbody>
         </table>
-        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF (ئاسویی)</button>
+        <button type="button" class="pdf-btn" onclick="openInvoicePage()">📄 ڤێکرنا قایمەی ب شێوەیەکێ خاوێن و سەد لە سەد ڕاست</button>
         <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
 
@@ -367,23 +352,152 @@ HTML_TEMPLATE = """
             `).join('');
         }
 
-        async function shareInvoicePDF() {
-            try {
-                let response = await fetch('/download_pdf');
-                let blob = await response.blob();
-                let file = new File([blob], "Organic_Juices_Qayma.pdf", { type: "application/pdf" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ title: 'پسولتا فرۆتنێ', text: 'فەرموو پسولتا تە یا ئۆرگانیک جویس', files: [file] });
-                } else {
-                    let url = URL.createObjectURL(blob);
-                    let a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'Organic_Juices_Qayma.pdf';
-                    a.click();
-                }
-            } catch (error) { window.location.href = '/download_pdf'; }
+        function openInvoicePage() {
+            window.open('/invoice_view', '_blank');
         }
     </script>
+</body>
+</html>
+"""
+
+INVOICE_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>قایما داواکری - ئۆرگانیک جویس</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #ffffff;
+            color: #1a1a1a;
+            margin: 0;
+            padding: 20px;
+            direction: rtl;
+            text-align: right;
+        }
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border: 2px solid #2e7d32;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        .header-title {
+            text-align: center;
+            color: #1b5e20;
+            font-size: 24px;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }
+        .header-date {
+            text-align: center;
+            color: #558b2f;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .note-alert {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            border: 1px solid #ffcdd2;
+        }
+        .category-section {
+            margin-bottom: 25px;
+        }
+        .category-title {
+            color: #2e7d32;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 2px solid #2e7d32;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+        th {
+            background-color: #f1f8e9;
+            color: #1b5e20;
+            font-weight: bold;
+        }
+        td:nth-child(2) {
+            text-align: center;
+            width: 100px;
+            font-weight: bold;
+        }
+        .print-btn {
+            display: block;
+            width: 100%;
+            background: #1b5e20;
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .print-btn:hover { background: #2e7d32; }
+        @media print {
+            .print-btn { display: none; }
+            body { padding: 0; }
+            .invoice-container { border: none; box-shadow: none; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="header-title">کۆمپانییا ئورگانیک جویس - قایما داواکری</div>
+        <div class="header-date">دیرۆک و دەم: {{ current_date }}</div>
+
+        {% if user_note %}
+        <div class="note-alert">
+            تێبینی: {{ user_note }}
+        </div>
+        {% endif %}
+
+        {% for cat_name, cat_items in categories.items() %}
+        <div class="category-section">
+            <div class="category-title">بەش: {{ cat_name }}</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>بابەت</th>
+                        <th>بڕ</th>
+                        <th>یەکە</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cat_items %}
+                    <tr>
+                        <td><b>{{ item.item_name }}</b></td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.unit }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+
+        <button class="print-btn" onclick="window.print()">🖨️ چاپکرن (Print / Save as PDF)</button>
+    </div>
 </body>
 </html>
 """
@@ -464,28 +578,6 @@ SETTINGS_TEMPLATE = """
 </body>
 </html>
 """
-
-class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-    def save(self):
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_page_decorations()
-            super().showPage()
-        super().save()
-    def draw_page_decorations(self):
-        logo_path = os.path.join(os.getcwd(), 'logo.png')
-        if os.path.exists(logo_path):
-            self.saveState()
-            if hasattr(self, 'setFillAlpha'):
-                self.setFillAlpha(0.08)
-            self.drawImage(logo_path, 270, 147, width=300, height=300, preserveAspectRatio=True, mask='auto')
-            self.restoreState()
 
 def get_device_id():
     if 'device_id' not in session:
@@ -615,8 +707,8 @@ def clear_ajax():
     conn.close()
     return jsonify({"status": "success", "orders": []})
 
-@app.route('/download_pdf')
-def download_pdf():
+@app.route('/invoice_view')
+def invoice_view():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
     
@@ -624,91 +716,15 @@ def download_pdf():
     orders = get_orders_list(device_id)
     user_note = get_note(device_id)
     
-    font_font_name = 'Helvetica'
-    for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
-        if os.path.exists(font_path):
-            try:
-                pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
-                font_font_name = 'ArabicFont'
-                break
-            except: continue
-
-    pdf_filename = f"Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
-    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
-    section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
-    
-    # Text styles without double reshaping to keep words completely normal and natural
-    header_right_style = ParagraphStyle('HRS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    header_center_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    header_left_style = ParagraphStyle('HLS', parent=styles['Normal'], alignment=0, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-
-    cell_right_style = ParagraphStyle('CRS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
-    cell_center_style = ParagraphStyle('CCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name)
-    cell_left_style = ParagraphStyle('CLS', parent=styles['Normal'], alignment=0, fontSize=10, fontName=font_font_name)
-    
-    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری')}</b>", title_style))
-    story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
-    
-    if user_note:
-        story.append(Spacer(1, 8))
-        story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
-        
-    story.append(Spacer(1, 10))
-    
     categories = {}
     for item in orders:
         cat = item["category"]
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(item)
-    
-    col_widths = [300, 221, 220] 
-    
-    for cat_name, cat_items in categories.items():
-        cat_story = []
-        cat_story.append(Paragraph(f"<b>{reshape_text('بەش: ')}{reshape_text(cat_name)}</b>", section_heading_style))
         
-        # Raw text without reshape_text since ReportLab handles standard unicode strings correctly when alignment and font are set right.
-        table_headers = [
-            Paragraph("<b>بابەت</b>", header_right_style),
-            Paragraph("<b>بڕ</b>", header_center_style),
-            Paragraph("<b>یەکە</b>", header_left_style)
-        ]
-        
-        table_data = [table_headers]
-        
-        for item in cat_items:
-            row = [
-                Paragraph(str(item["item_name"]), cell_right_style),
-                Paragraph(str(item["quantity"]), cell_center_style),
-                Paragraph(str(item["unit"]), cell_left_style)
-            ]
-            table_data.append(row)
-            
-        t = Table(table_data, colWidths=col_widths)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('LEFTPADDING', (0,0), (-1,-1), 8),
-            ('RIGHTPADDING', (0,0), (-1,-1), 8),
-        ]))
-        
-        cat_story.append(t)
-        cat_story.append(Spacer(1, 10))
-        story.append(KeepTogether(cat_story))
-        
-    doc.build(story, canvasmaker=NumberedCanvas)
-    return send_file(pdf_filename, as_attachment=True)
+    current_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+    return render_template_string(INVOICE_TEMPLATE, categories=categories, user_note=user_note, current_date=current_date)
 
 if __name__ == "__main__":
     init_db()
