@@ -17,9 +17,10 @@ app.secret_key = 'organic_juices_secret_key_2026'
 
 SHARED_PASSWORD = "organic123"
 
-# بنکەیا سەرەکی یا بابەتان (جودا بۆ هەر بەشەکی - لێرە دەتوانیت هەر بابەتەکی زێدە بکەی)
+# بنکەیا سەرەکی یا بابەتان (لێرە دەتوانیت هەر بابەتەکی، ڕەز یان هەر تشتەکێ دی، ل بەشێ فێقی، مەعمەل یا مەغزەن زێدە بکەی)
 ALL_ITEMS = {
     "فێقی": [
+        ("ڕەز", "کیلو"),  # <--- فێقییێ نوو (ڕەز) لێرە هاتە زێدەکرن
         ("خیار", "کیلو"), ("نافوكادو", "کیلو"), ("مانكو", "کیلو"), ("موز", "کارتۆن"), 
         ("برتقال", "کیلو"), ("سف", "دانە"), ("ليمون", "کیلو"), ("جويزر", "کیلو"), 
         ("جويز هند", "دانە"), ("هنار", "کیلو"), ("انه ناس", "لبان"), ("خوخ", "کیلو"), 
@@ -29,7 +30,7 @@ ALL_ITEMS = {
     ],
     "مەعمەل": [
         ("خوخ", "کیلو"), ("مانكو", "کیلو"), ("شاتو", "کیلو"), ("انه ناس", "لبان"),
-        ("شيرلوكو", "دانە"), ("بابه ت + ii cm", "دانە"), ("تمرهندی مزن", "دانە"),
+        ("شيرلوكو", "دانە"), ("بابه t + ii cm", "دانە"), ("تمرهندی مزن", "دانە"),
         ("تمرهندی بجيك", "دانە"), ("مویش مزن", "کیلو"), ("مویش بجيك", "کیلو"),
         ("به فر", "دانە"), ("ئاف", "دانە"), ("عصير حليك", "دانە"), ("عصير زنجبيل+مانكو", "دانە"),
         ("کرينجوس", "دانە"), ("باقركه ری بيستی", "دانە"), ("دزهو کردن", "دانە")
@@ -411,7 +412,7 @@ def get_logo():
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+        return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -424,7 +425,7 @@ def quick_add_ajax():
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+        return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
