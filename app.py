@@ -20,8 +20,6 @@ SHARED_PASSWORD = "organic123"
 def init_db():
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
-    
-    # Check and create orders table with all necessary columns
     c.execute('''CREATE TABLE IF NOT EXISTS orders
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   device_id TEXT,
@@ -30,25 +28,16 @@ def init_db():
                   unit TEXT,
                   category TEXT)''')
     
-    # Check and create items table
     c.execute('''CREATE TABLE IF NOT EXISTS items
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   category TEXT,
                   item_name TEXT,
                   unit TEXT)''')
                   
-    # Check and create notes table
     c.execute('''CREATE TABLE IF NOT EXISTS notes
                  (device_id TEXT PRIMARY KEY,
                   note_text TEXT)''')
     
-    # Safe columns check for existing databases
-    for table, col, col_type in [('orders', 'category', 'TEXT'), ('orders', 'unit', 'TEXT'), ('orders', 'quantity', 'REAL')]:
-        try:
-            c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-        except sqlite3.OperationalError:
-            pass # Column already exists
-
     c.execute("SELECT COUNT(*) FROM items")
     if c.fetchone()[0] == 0:
         default_items = [
@@ -100,11 +89,8 @@ def get_all_items_dict():
 def reshape_text(text):
     if not text:
         return ""
-    try:
-        reshaped = arabic_reshaper.reshape(str(text))
-        return get_display(reshaped)
-    except:
-        return str(text)
+    reshaped = arabic_reshaper.reshape(str(text))
+    return get_display(reshaped)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -226,9 +212,10 @@ HTML_TEMPLATE = """
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px; 
-            padding: 10px;
+            padding-bottom: 10px;
             border-bottom: 3px solid #2e7d32;
             background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
             border-radius: 8px;
         }
         .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
@@ -240,7 +227,7 @@ HTML_TEMPLATE = """
         .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
 
-        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding: 4px 5px; background: rgba(255,255,255,0.8); border-radius: 4px; }
+        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; background: rgba(255,255,255,0.8); padding-right: 5px; border-radius: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .item-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
         .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
@@ -520,6 +507,14 @@ def get_note(device_id):
     conn.close()
     return row[0] if row else ""
 
+def get_orders_list(device_id):
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -541,14 +536,8 @@ def index():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
     device_id = get_device_id()
-    
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-    rows = c.fetchall()
-    conn.close()
-    
-    tuple_orders = [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
+    raw_orders = get_orders_list(device_id)
+    tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
     items_dict = get_all_items_dict()
     current_note = get_note(device_id)
     return render_template_string(HTML_TEMPLATE, all_items=items_dict, orders=tuple_orders, current_note=current_note)
@@ -618,13 +607,8 @@ def quick_add_ajax():
     c.execute("INSERT INTO orders (device_id, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
               (device_id, request.form['item_name'], float(request.form['quantity']), request.form['unit'], request.form['category']))
     conn.commit()
-    
-    c.execute("SELECT id, item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-    rows = c.fetchall()
     conn.close()
-    
-    orders_list = [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
-    return jsonify({"status": "success", "orders": orders_list})
+    return jsonify({"status": "success", "orders": get_orders_list(device_id)})
 
 @app.route('/clear_ajax')
 def clear_ajax():
@@ -644,6 +628,7 @@ def download_pdf():
         return redirect(url_for('login'))
     
     device_id = get_device_id()
+    items_dict = get_all_items_dict()
     user_note = get_note(device_id)
     
     font_font_name = 'Helvetica'
@@ -656,7 +641,7 @@ def download_pdf():
             except: continue
 
     pdf_filename = f"Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     
@@ -664,6 +649,7 @@ def download_pdf():
     subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
     header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=9, fontName=font_font_name)
     
     story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
@@ -674,40 +660,41 @@ def download_pdf():
         
     story.append(Spacer(1, 10))
     
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-    order_rows = c.fetchall()
-    conn.close()
+    categories = ["فێقی", "مەعمەل", "مەغزەن"]
     
-    table_headers = [
-        Paragraph(f"<b>{reshape_text('بەش')}</b>", header_cell_style),
-        Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_cell_style),
-        Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_cell_style),
-        Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_cell_style)
-    ]
+    table_headers = []
+    for cat in categories:
+        table_headers.append(Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style))
+    
+    max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
     
     table_data = [table_headers]
-    for item_name, quantity, unit, category in order_rows:
-        row = [
-            Paragraph(reshape_text(category), ParagraphStyle('C1', fontName=font_font_name, fontSize=10, alignment=1)),
-            Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('C2', fontName=font_font_name, fontSize=10, alignment=1)),
-            Paragraph(str(quantity), ParagraphStyle('C3', fontName=font_font_name, fontSize=10, alignment=1)),
-            Paragraph(reshape_text(unit), ParagraphStyle('C4', fontName=font_font_name, fontSize=10, alignment=1))
-        ]
+    
+    for i in range(max_rows):
+        row = []
+        for cat in categories:
+            items_in_cat = items_dict.get(cat, [])
+            if i < len(items_in_cat):
+                item_name, unit = items_in_cat[i]
+                text_cell = f"{reshape_text(item_name)} ({reshape_text(unit)})  ✓"
+                row.append(Paragraph(text_cell, cell_style))
+            else:
+                row.append(Paragraph("", cell_style))
         table_data.append(row)
         
-    if len(order_rows) == 0:
-        table_data.append([Paragraph(reshape_text("چ بابەتەک نەهاتینە زێدەکرن"), ParagraphStyle('C0', fontName=font_font_name, fontSize=10, alignment=1)), "", "", ""])
-
-    t = Table(table_data, colWidths=[120, 200, 100, 110])
+    col_width = 560 / 3
+    col_widths = [col_width, col_width, col_width]
+    
+    t = Table(table_data, colWidths=col_widths)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     
     story.append(t)
@@ -716,4 +703,5 @@ def download_pdf():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
