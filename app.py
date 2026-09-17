@@ -132,9 +132,35 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>کۆمپانییا ئورگانیک جویس</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ئۆرگانیک جویس">
+    <link rel="apple-touch-icon" href="/logo.png">
+
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background-color: #ffffff; margin: 0; padding: 15px; text-align: center; color: #1a1a1a; }
-        .brand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; border-bottom: 3px solid #2e7d32; background: rgba(255, 255, 255, 0.9); border-radius: 8px; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #ffffff; 
+            margin: 0; 
+            padding: 15px; 
+            text-align: center; 
+            color: #1a1a1a;
+            position: relative;
+        }
+        body::before {
+            content: "";
+            background-image: url('/logo.png');
+            background-repeat: no-repeat;
+            background-position: center 180px;
+            background-size: 260px;
+            opacity: 0.12;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .brand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; border-bottom: 3px solid #2e7d32; background: rgba(255,255,255,0.9); border-radius: 8px; }
         .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
         .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
         .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
@@ -144,14 +170,14 @@ HTML_TEMPLATE = """
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
         .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding: 4px 5px; background: rgba(255,255,255,0.8); border-radius: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .item-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
+        .item-card { background: rgba(255,255,255,0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
         .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
         .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
         .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
         .qty-btn { background: #e0e0e0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; color: #333; }
         .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
-        .order-summary { background: rgba(255, 255, 255, 0.98); border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
+        .order-summary { background: rgba(255,255,255,0.98); border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
         .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
         .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -307,6 +333,36 @@ SETTINGS_TEMPLATE = """
 </html>
 """
 
+class NumberedCanvas(canvas.Canvas if 'canvas' in globals() else object):
+    pass
+
+# Safe Canvas for Watermark Logo in PDF
+from reportlab.pdfgen import canvas as rl_canvas
+class WatermarkCanvas(rl_canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+    def save(self):
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_watermark()
+            super().showPage()
+        super().save()
+    def draw_watermark(self):
+        try:
+            logo_path = os.path.join(os.getcwd(), 'logo.png')
+            if os.path.exists(logo_path):
+                self.saveState()
+                if hasattr(self, 'setFillAlpha'):
+                    self.setFillAlpha(0.15)
+                self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
+                self.restoreState()
+        except:
+            pass
+
 def get_device_id():
     if 'device_id' not in session:
         session['device_id'] = os.urandom(8).hex()
@@ -404,12 +460,14 @@ def delete_item_setting(item_id):
 
 @app.route('/logo.png')
 def get_logo():
-    try: return send_from_directory(os.getcwd(), 'logo.png')
-    except: return "", 404
+    try:
+        return send_from_directory(os.getcwd(), 'logo.png')
+    except:
+        return "", 404
 
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     try:
         conn = sqlite3.connect("clean_qayma.db")
@@ -422,7 +480,7 @@ def quick_add_ajax():
 
 @app.route('/clear_ajax')
 def clear_ajax():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     try:
         conn = sqlite3.connect("clean_qayma.db")
@@ -440,7 +498,6 @@ def download_pdf():
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.pdfgen import canvas
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         
@@ -491,7 +548,7 @@ def download_pdf():
                     unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=8, alignment=0))
                     
                     cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
-                    cell_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'MIDDLE'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
+                    cell_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
                     row.append(cell_table)
                 else:
                     row.append(Paragraph("", header_cell_style))
@@ -502,7 +559,7 @@ def download_pdf():
         t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0,0), (-1,-1), 3), ('TOPPADDING', (0,0), (-1,-1), 3), ('LEFTPADDING', (0,0), (-1,-1), 4), ('RIGHTPADDING', (0,0), (-1,-1), 4)]))
         
         story.append(t)
-        doc.build(story)
+        doc.build(story, canvasmaker=WatermarkCanvas)
         return send_file(pdf_filename, as_attachment=True)
     except Exception as e:
         return f"PDF Error: {str(e)}", 500
