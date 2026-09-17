@@ -195,16 +195,18 @@ HTML_TEMPLATE = """
             color: #1a1a1a;
             position: relative;
         }
+        /* لۆگۆیا ئورگانیک ل پاشبنەمایێ شاشێ ب ڕوونی و گەورە */
         body::before {
             content: "";
             background-image: url('/logo.png');
             background-repeat: no-repeat;
-            background-position: center top 130px;
-            background-size: 280px;
-            opacity: 0.08;
+            background-position: center 180px;
+            background-size: 260px;
+            opacity: 0.12;
             position: fixed;
             top: 0; left: 0; bottom: 0; right: 0;
             z-index: -1;
+            pointer-events: none;
         }
         .brand-header { 
             display: flex;
@@ -213,19 +215,22 @@ HTML_TEMPLATE = """
             margin-bottom: 15px; 
             padding-bottom: 10px;
             border-bottom: 3px solid #2e7d32;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
         }
         .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
         .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
         .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         
-        .note-box { background: #f9fbe7; border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
+        .note-box { background: rgba(249, 251, 231, 0.95); border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
         .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
 
-        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; }
+        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; background: rgba(255,255,255,0.8); padding-right: 5px; border-radius: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .item-card { background: #ffffff; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
+        .item-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
         .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
         .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
         .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
@@ -234,7 +239,7 @@ HTML_TEMPLATE = """
         .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
         .btn-add.added { background: #388e3c; transform: scale(0.96); }
-        .order-summary { background: #ffffff; border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
+        .order-summary { background: rgba(255, 255, 255, 0.98); border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
         .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
         .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -246,7 +251,7 @@ HTML_TEMPLATE = """
     <div class="brand-header">
         <h1>کۆمپانییا ئورگانیک جویس</h1>
         <div class="user-panel">
-            <a href="/settings" class="nav-link">⚙️ سێتینگ (زێدەکرن و ژێبرن)</a>
+            <a href="/settings" class="nav-link">⚙️ سێتینگ</a>
             <a href="/logout" class="logout-btn">چوونەدەروون</a>
         </div>
     </div>
@@ -486,7 +491,7 @@ class NumberedCanvas(canvas.Canvas):
         if os.path.exists(logo_path):
             self.saveState()
             if hasattr(self, 'setFillAlpha'):
-                self.setFillAlpha(0.12)
+                self.setFillAlpha(0.15)
             self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
@@ -672,7 +677,6 @@ def download_pdf():
             items_in_cat = items_dict.get(cat, [])
             if i < len(items_in_cat):
                 item_name, unit = items_in_cat[i]
-                # زێدەکرنا یەکێ دگەل ناڤێ بابەتی
                 text_cell = f"{reshape_text(item_name)} ({reshape_text(unit)})  ✓"
                 row.append(Paragraph(text_cell, cell_style))
             else:
