@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
@@ -487,7 +487,6 @@ class NumberedCanvas(canvas.Canvas):
             self.saveState()
             if hasattr(self, 'setFillAlpha'):
                 self.setFillAlpha(0.10)
-            # Center of A4 Landscape (841 x 595 points)
             self.drawImage(logo_path, 270, 147, width=300, height=300, preserveAspectRatio=True, mask='auto')
             self.restoreState()
 
@@ -638,7 +637,6 @@ def download_pdf():
             except: continue
 
     pdf_filename = f"Organic_Juices_Qayma.pdf"
-    # A4 Landscape: width = 841.89, height = 595.27
     doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
     styles = getSampleStyleSheet()
@@ -646,6 +644,7 @@ def download_pdf():
     title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
+    section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
     header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
     cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
     
@@ -656,43 +655,54 @@ def download_pdf():
         story.append(Spacer(1, 6))
         story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
         
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 10))
     
-    # Table headers for ordered items: Category, Item Name, Quantity, Unit
-    table_headers = [
-        Paragraph(f"<b>{reshape_text('بەش')}</b>", header_cell_style),
-        Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_cell_style),
-        Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_cell_style),
-        Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_cell_style)
-    ]
-    
-    table_data = [table_headers]
-    
+    # Group orders by category
+    categories = {}
     for item in orders:
-        row = [
-            Paragraph(reshape_text(item["category"]), cell_style),
-            Paragraph(reshape_text(item["item_name"]), cell_style),
-            Paragraph(str(item["quantity"]), cell_style),
-            Paragraph(reshape_text(item["unit"]), cell_style)
-        ]
-        table_data.append(row)
+        cat = item["category"]
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(item)
+    
+    col_widths = [311, 240, 240] # Total width ~ 791 points
+    
+    for cat_name, cat_items in categories.items():
+        cat_story = []
+        cat_story.append(Paragraph(f"<b>{reshape_text('بەش: ')}{reshape_text(cat_name)}</b>", section_heading_style))
         
-    # Total printable width on landscape A4 with margins: 841.89 - 50 = ~791 points
-    col_widths = [180, 311, 150, 150]
-    
-    t = Table(table_data, colWidths=col_widths)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
-        ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('TOPPADDING', (0,0), (-1,-1), 6),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
-    ]))
-    
-    story.append(t)
+        table_headers = [
+            Paragraph(f"<b>{reshape_text('بابەت')}</b>", header_cell_style),
+            Paragraph(f"<b>{reshape_text('بڕ')}</b>", header_cell_style),
+            Paragraph(f"<b>{reshape_text('یەکە')}</b>", header_cell_style)
+        ]
+        
+        table_data = [table_headers]
+        
+        for item in cat_items:
+            row = [
+                Paragraph(reshape_text(item["item_name"]), cell_style),
+                Paragraph(str(item["quantity"]), cell_style),
+                Paragraph(reshape_text(item["unit"]), cell_style)
+            ]
+            table_data.append(row)
+            
+        t = Table(table_data, colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('LEFTPADDING', (0,0), (-1,-1), 8),
+            ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ]))
+        
+        cat_story.append(t)
+        cat_story.append(Spacer(1, 10))
+        story.append(KeepTogether(cat_story))
+        
     doc.build(story, canvasmaker=NumberedCanvas)
     return send_file(pdf_filename, as_attachment=True)
 
