@@ -17,39 +17,6 @@ app.secret_key = 'organic_juices_secret_key_2026'
 
 SHARED_PASSWORD = "organic123"
 
-# بنکەیا سەرەکی یا بابەتان (لێرە دەتوانیت هەر بابەتەکی، ڕەز یان هەر تشتەکێ دی، ل بەشێ فێقی، مەعمەل یا مەغزەن زێدە بکەی)
-ALL_ITEMS = {
-    "فێقی": [
-        ("ڕەز", "کیلو"),  # <--- فێقییێ نوو (ڕەز) لێرە هاتە زێدەکرن
-        ("خیار", "کیلو"), ("نافوكادو", "کیلو"), ("مانكو", "کیلو"), ("موز", "کارتۆن"), 
-        ("برتقال", "کیلو"), ("سف", "دانە"), ("ليمون", "کیلو"), ("جويزر", "کیلو"), 
-        ("جويز هند", "دانە"), ("هنار", "کیلو"), ("انه ناس", "لبان"), ("خوخ", "کیلو"), 
-        ("شاتو", "کیلو"), ("فه صب", "دانە"), ("سندی", "کیلو"), ("كوندور", "کیلو"), 
-        ("شوتی", "کیلو"), ("فراولا", "کیلو"), ("كیفی", "کیلو"), ("كاكی", "کیلو"), 
-        ("هیزیر", "کیلو"), ("هرميك", "کیلو")
-    ],
-    "مەعمەل": [
-        ("خوخ", "کیلو"), ("مانكو", "کیلو"), ("شاتو", "کیلو"), ("انه ناس", "لبان"),
-        ("شيرلوكو", "دانە"), ("بابه t + ii cm", "دانە"), ("تمرهندی مزن", "دانە"),
-        ("تمرهندی بجيك", "دانە"), ("مویش مزن", "کیلو"), ("مویش بجيك", "کیلو"),
-        ("به فر", "دانە"), ("ئاف", "دانە"), ("عصير حليك", "دانە"), ("عصير زنجبيل+مانكو", "دانە"),
-        ("کرينجوس", "دانە"), ("باقركه ری بيستی", "دانە"), ("دزهو کردن", "دانە")
-    ],
-    "مەغزەن": [
-        ("كلاس+قباغ", "دانە"), ("بطل مزن+قباغ", "دانە"), ("بطل بجيك+قباغ", "دانە"),
-        ("قصاب", "دانە"), ("كلينيس", "دانە"), ("بوكس (۲)", "دانە"), ("بوكس (٤)", "دانە"),
-        ("بوكس (٦)", "دانە"), ("علاكه لوكو", "دانە"), ("علاكه زلال", "دانە"),
-        ("زاهی", "دانە"), ("كليت", "دانە"), ("باس باس", "کیلو"), ("باته", "کیلو"),
-        ("مساحه", "دانە"), ("فرجه", "دانە"), ("دسكورك", "دانە"), ("وره فه كاشير", "دانە"),
-        ("بوكس فواكه", "دانە"), ("جتل", "دانە"), ("قباغ", "دانە"), ("كلاس تيست", "دانە"),
-        ("جامسی", "دانە"), ("معتر جو", "دانە"), ("خارنا بالندا", "دانە")
-    ],
-    "تشتێن مەخسوس": [
-        ("بابەتێ نموونە ١", "دانە"),
-        ("بابەتێ نموونە ٢", "کیلو")
-    ]
-}
-
 def init_db():
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -60,10 +27,62 @@ def init_db():
                   quantity REAL,
                   unit TEXT,
                   category TEXT)''')
-    conn.commit()
+    
+    # خشتەیەک بۆ پاراستنا بابەتان دا بشێی ل سێتینگ زێدە و کێم بکەی
+    c.execute('''CREATE TABLE IF NOT EXISTS items
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  category TEXT,
+                  item_name TEXT,
+                  unit TEXT)''')
+    
+    # ئەگەر خشتە ڤالا بيت، بابه‌تێن سەرەتایی تێدا تومار دکەین
+    c.execute("SELECT COUNT(*) FROM items")
+    if c.fetchone()[0] == 0:
+        default_items = [
+            ("فێقی", "نافوكادو", "کیلو"), ("فێقی", "مانكو", "کیلو"), ("فێقی", "موز", "کارتۆن"), 
+            ("فێقی", "برتقال", "کیلو"), ("فێقی", "سف", "دانە"), ("فێقی", "ليمون", "کیلو"), 
+            ("فێقی", "جويزر", "کیلو"), ("فێقی", "جويز هند", "دانە"), ("فێقی", "هنار", "کیلو"), 
+            ("فێقی", "انه ناس", "لبان"), ("فێقی", "خوخ", "کیلو"), ("فێقی", "شاتو", "کیلو"), 
+            ("فێقی", "فه صب", "دانە"), ("فێقی", "سندی", "کیلو"), ("فێقی", "كوندور", "کیلو"), 
+            ("فێقی", "شوتی", "کیلو"), ("فێقی", "فراولا", "کیلو"), ("فێقی", "كیفی", "کیلو"), 
+            ("فێقی", "كاكی", "کیلو"), ("فێقی", "هیزیر", "کیلو"), ("فێقی", "هرميك", "کیلو"),
+            
+            ("مەعمەل", "خوخ", "کیلو"), ("مەعمەل", "مانكو", "کیلو"), ("مەعمەل", "شاتو", "کیلو"), 
+            ("مەعمەل", "انه ناس", "لبان"), ("مەعمەل", "شيرلوكو", "دانە"), ("مەعمەل", "بابه t + ii cm", "دانە"), 
+            ("مەعمەل", "تمرهندی مزن", "دانە"), ("مەعمەل", "تمرهندی بجيك", "دانە"), ("مەعمەل", "مویش مزن", "کیلو"), 
+            ("مەعمەل", "مویش بجيك", "کیلو"), ("مەعمەل", "به فر", "دانە"), ("مەعمەل", "ئاف", "دانە"), 
+            ("مەعمەل", "عصير حليك", "دانە"), ("مەعمەل", "عصير زنجبيل+مانكو", "دانە"), ("مەعمەل", "کرينجوس", "دانە"), 
+            ("مەعمەل", "باقركه ری بيستی", "دانە"), ("مەعمەل", "دزهو کردن", "دانە"),
+            
+            ("مەغزەن", "كلاس+قباغ", "دانە"), ("مەغزەن", "بطل مزن+قباغ", "دانە"), ("مەغزەن", "بطل بجيك+قباغ", "دانە"),
+            ("مەغزەن", "قصاب", "دانە"), ("مەغزەن", "كلينيس", "دانە"), ("مەغزەن", "بوكس (۲)", "دانە"), 
+            ("مەغزەن", "بوكس (٤)", "دانە"), ("مەغزەن", "بوكس (٦)", "دانە"), ("مەغزەن", "علاكه لوكو", "دانە"), 
+            ("مەغزەن", "علاكه زلال", "دانە"), ("مەغزەن", "زاهی", "دانە"), ("مەغزەن", "كليت", "دانە"), 
+            ("مەغزەن", "باس باس", "کیلو"), ("مەغزەن", "باته", "کیلو"), ("مەغزەن", "مساحه", "دانە"), 
+            ("مەغزەن", "فرجه", "دانە"), ("مەغزەن", "دسكورك", "دانە"), ("مەغزەن", "وره فه كاشير", "دانە"), 
+            ("مەغزەن", "بوكس فواكه", "دانە"), ("مەغزەن", "جتل", "دانە"), ("مەغزەن", "قباغ", "دانە"), 
+            ("مەغزەن", "كلاس تيست", "دانە"), ("مەغزەن", "جامسی", "دانە"), ("مەغزەن", "معتر جو", "دانە"), 
+            ("مەغزەن", "خارنا بالندا", "دانە")
+        ]
+        c.executemany("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", default_items)
+        conn.commit()
     conn.close()
 
 init_db()
+
+def get_all_items_dict():
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("SELECT category, item_name, unit FROM items")
+    rows = c.fetchall()
+    conn.close()
+    
+    items_dict = {}
+    for cat, name, unit in rows:
+        if cat not in items_dict:
+            items_dict[cat] = []
+        items_dict[cat].append((name, unit))
+    return items_dict
 
 def reshape_text(text):
     if not text:
@@ -189,13 +208,14 @@ HTML_TEMPLATE = """
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px; 
+            margin-bottom: 15px; 
             padding-bottom: 10px;
             border-bottom: 3px solid #2e7d32;
         }
-        .brand-header h1 { margin: 0; font-size: 20px; font-weight: 900; color: #1b5e20; }
+        .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
         .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-        .logout-btn { background-color: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
+        .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
+        .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .item-card { background: #ffffff; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
@@ -219,7 +239,7 @@ HTML_TEMPLATE = """
     <div class="brand-header">
         <h1>کۆمپانییا ئورگانیک جویس</h1>
         <div class="user-panel">
-            <span>📱 <b>کاشێر</b></span>
+            <a href="/settings" class="nav-link">⚙️ سێتینگ (زێدەکرن و ژێبرن)</a>
             <a href="/logout" class="logout-btn">چوونەدەروون</a>
         </div>
     </div>
@@ -345,6 +365,83 @@ HTML_TEMPLATE = """
 </html>
 """
 
+SETTINGS_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ڕێڤەبرنا بابەتان - سێتینگ</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 15px; color: #1a1a1a; direction: rtl; text-align: right; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .back-btn { background: #2e7d32; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h2, h3 { color: #1b5e20; margin-top: 0; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        button { background: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; }
+        button:hover { background: #1b5e20; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px; font-size: 13px; text-align: right; }
+        th { background-color: #f5f5f5; color: #2e7d32; }
+        .del-btn { background-color: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2 style="margin: 0;">⚙️ سێتینگ: زێدەکرن و ژێبرنا بابەتان</h2>
+        <a href="/" class="back-btn">⬅️ ڤەڕەقین بۆ کاشێرێ</a>
+    </div>
+
+    <div class="card">
+        <h3>➕ زێدەکرنا بابەتەکێ نوو</h3>
+        <form method="POST" action="/add_item_setting">
+            <label>بەش (Category):</label>
+            <select name="category" required>
+                <option value="فێقی">فێقی</option>
+                <option value="مەعمەل">مەعمەل</option>
+                <option value="مەغزەن">مەغزەن</option>
+            </select>
+
+            <label>ناڤێ بابەتی (نموونە: ڕەز):</label>
+            <input type="text" name="item_name" placeholder="ناڤێ بابەتی بنڤیسە" required>
+
+            <label>یەکە (Unit - نموونە: کیلو، دانە):</label>
+            <input type="text" name="unit" placeholder="یەکە بنڤیسە" required>
+
+            <button type="submit">تومارکرن و زێدەکرن</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>📋 لیستەیا هەمی بابەتێن هەی (بۆ ژێبرنێ)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>بەش</th>
+                    <th>ناڤێ بابەتی</th>
+                    <th>یەکە</th>
+                    <th>کردار</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in all_items_list %}
+                <tr>
+                    <td>{{ item[1] }}</td>
+                    <td><b>{{ item[2] }}</b></td>
+                    <td>{{ item[3] }}</td>
+                    <td>
+                        <a href="/delete_item_setting/{{ item[0] }}" class="del-btn" onclick="return confirm('تە مسۆگەر دڤێت ڤی بابەتی ژێببی؟')">ژێبرن 🗑️</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+"""
+
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -403,7 +500,46 @@ def index():
     device_id = get_device_id()
     raw_orders = get_orders_list(device_id)
     tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
-    return render_template_string(HTML_TEMPLATE, all_items=ALL_ITEMS, orders=tuple_orders)
+    items_dict = get_all_items_dict()
+    return render_template_string(HTML_TEMPLATE, all_items=items_dict, orders=tuple_orders)
+
+@app.route('/settings')
+def settings_page():
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("SELECT id, category, item_name, unit FROM items ORDER BY category, id DESC")
+    rows = c.fetchall()
+    conn.close()
+    return render_template_string(SETTINGS_TEMPLATE, all_items_list=rows)
+
+@app.route('/add_item_setting', methods=['POST'])
+def add_item_setting():
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    category = request.form.get('category')
+    item_name = request.form.get('item_name')
+    unit = request.form.get('unit')
+    
+    if category and item_name and unit:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", (category, item_name, unit))
+        conn.commit()
+        conn.close()
+    return redirect(url_for('settings_page'))
+
+@app.route('/delete_item_setting/<int:item_id>')
+def delete_item_setting(item_id):
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM items WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('settings_page'))
 
 @app.route('/logo.png')
 def get_logo():
@@ -412,7 +548,7 @@ def get_logo():
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}}, 401
+        return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -425,7 +561,7 @@ def quick_add_ajax():
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}}, 401
+        return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
