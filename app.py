@@ -9,8 +9,14 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-import arabic_reshaper
-from bidi.algorithm import get_display
+
+# بو پاراستنا کارکرنا کوردی بێ خطە
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    HAS_ARABIC_LIBS = True
+except ImportError:
+    HAS_ARABIC_LIBS = False
 
 app = Flask(__name__)
 app.secret_key = 'organic_juices_secret_key_2026'
@@ -89,8 +95,13 @@ def get_all_items_dict():
 def reshape_text(text):
     if not text:
         return ""
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped)
+    if HAS_ARABIC_LIBS:
+        try:
+            reshaped = arabic_reshaper.reshape(str(text))
+            return get_display(reshaped)
+        except:
+            return str(text)
+    return str(text)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -487,11 +498,14 @@ class NumberedCanvas(canvas.Canvas):
     def draw_page_decorations(self):
         logo_path = os.path.join(os.getcwd(), 'logo.png')
         if os.path.exists(logo_path):
-            self.saveState()
-            if hasattr(self, 'setFillAlpha'):
-                self.setFillAlpha(0.15)
-            self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
-            self.restoreState()
+            try:
+                self.saveState()
+                if hasattr(self, 'setFillAlpha'):
+                    self.setFillAlpha(0.15)
+                self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
+                self.restoreState()
+            except:
+                pass
 
 def get_device_id():
     if 'device_id' not in session:
@@ -544,7 +558,7 @@ def index():
 @app.route('/save_note', methods=['POST'])
 def save_note():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}}, 401
+        return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     note_text = request.form.get('note', '')
     conn = sqlite3.connect("clean_qayma.db")
@@ -599,7 +613,7 @@ def get_logo():
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}}, 401
+        return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -612,7 +626,7 @@ def quick_add_ajax():
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}}, 401
+        return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -630,24 +644,25 @@ def download_pdf():
     items_dict = get_all_items_dict()
     user_note = get_note(device_id)
     
-    font_font_name = 'Helvetica'
+    font_name = 'Helvetica'
     for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
         if os.path.exists(font_path):
             try:
                 pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
-                font_font_name = 'ArabicFont'
+                font_name = 'ArabicFont'
                 break
-            except: continue
+            except: 
+                pass
 
-    pdf_filename = f"Organic_Juices_Qayma.pdf"
+    pdf_filename = "Organic_Juices_Qayma.pdf"
     doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
-    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
-    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
+    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#33691e'))
+    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_name, textColor=colors.HexColor('#b71c1c'))
+    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
     
     story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
@@ -675,9 +690,8 @@ def download_pdf():
             if i < len(items_in_cat):
                 item_name, unit = items_in_cat[i]
                 
-                # ناڤ ل ڕاستێ (alignment=2)، و یەکە ل چەپێ (alignment=0) د ناو خانەکا پاقژ دا
-                name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_font_name, fontSize=9, alignment=2))
-                unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_font_name, fontSize=8, alignment=0))
+                name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=9, alignment=2))
+                unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=8, alignment=0))
                 
                 cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
                 cell_table.setStyle(TableStyle([
