@@ -171,73 +171,47 @@ HTML_TEMPLATE = """
     <link rel="apple-touch-icon" href="/logo.png">
 
     <style>
-        body { 
-            font-family: system-ui, -apple-system, sans-serif; 
-            background-color: #ffffff; 
-            margin: 0; 
-            padding: 15px; 
-            text-align: center; 
-            color: #1a1a1a;
-            position: relative;
-        }
-        body::before {
-            content: "";
-            background-image: url('/logo.png');
-            background-repeat: no-repeat;
-            background-position: center top 130px;
-            background-size: 280px;
-            opacity: 0.08;
-            position: fixed;
-            top: 0; left: 0; bottom: 0; right: 0;
-            z-index: -1;
-        }
-        .brand-header { 
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px; 
-            padding-bottom: 10px;
-            border-bottom: 3px solid #2e7d32;
-        }
-        .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
-        .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-        .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
-        .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 10px; text-align: center; color: #1a1a1a; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        .header h1 { margin: 0; font-size: 16px; color: #1b5e20; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-link { background: #2e7d32; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold; }
+        .logout-btn { background: #c62828; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold; }
         
-        .note-box { background: #f9fbe7; border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
-        .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+        .note-box { background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; text-align: right; }
+        .note-box textarea { width: 100%; height: 50px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
 
-        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .item-card { background: #ffffff; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
+        .section-title { text-align: right; margin: 20px 5px 10px 5px; color: #1b5e20; font-size: 16px; font-weight: bold; border-bottom: 2px solid #c8e6c9; padding-bottom: 4px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .item-card { background: white; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #eee; }
         .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
-        .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
+        .unit-tag { font-size: 11px; color: #666; margin-bottom: 6px; }
         .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
-        .qty-btn { background: #e0e0e0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; color: #333; }
-        .qty-btn:active { background: #ccc; }
+        .qty-btn { background: #f0f0f0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .qty-btn:active { background: #ddd; }
         .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
         .btn-add.added { background: #388e3c; transform: scale(0.96); }
-        .order-summary { background: #ffffff; border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
-        .pdf-btn { background: #2c3e50; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
-        .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
+        .order-summary { background: white; border-radius: 8px; padding: 15px; margin-top: 20px; text-align: right; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; margin-top: 10px; cursor: pointer; }
+        .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 8px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; font-size: 13px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; font-size: 13px; }
-        th { background-color: #f5f5f5; color: #2e7d32; }
+        th { background-color: #f5f5f5; color: #1b5e20; }
     </style>
 </head>
 <body>
-    <div class="brand-header">
+    <div class="header">
         <h1>کۆمپانییا ئورگانیک جویس</h1>
-        <div class="user-panel">
-            <a href="/settings" class="nav-link">⚙️ سێتینگ (زێدەکرن و ژێبرن)</a>
+        <div class="nav-links">
+            <a href="/settings" class="nav-link">⚙️ سێتینگ</a>
             <a href="/logout" class="logout-btn">چوونەدەروون</a>
         </div>
     </div>
 
     <div class="note-box">
-        <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر فۆرماتێ دێ دیار بیت):</label>
+        <label for="noteInput" style="font-weight: bold; color: #1b5e20; font-size: 12px; display: block; margin-bottom: 4px;">📝 تێبینی (ل سەر قایمەی دێ دیار بیت):</label>
         <textarea id="noteInput" placeholder="تێبینییا خۆ لێرە بنڤیسە...">{{ current_note }}</textarea>
         <button type="button" class="note-save-btn" onclick="saveNote()">تومارکرنا تێبینیێ</button>
     </div>
@@ -266,7 +240,7 @@ HTML_TEMPLATE = """
     {% endfor %}
 
     <div class="order-summary" id="orderSummaryContainer" style="display: {% if orders %}block{% else %}none{% endif %};">
-        <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری (قایمە):</h3>
+        <h3 style="margin: 0 0 10px 0; color: #1b5e20; font-size: 15px;">📋 لیستا داواکری (قایمە):</h3>
         <table id="ordersTable">
             <thead>
                 <tr>
@@ -370,7 +344,7 @@ INVOICE_TEMPLATE = """
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            background: #f0f0f0;
+            background: #f7f9f6;
             color: #1a1a1a;
             margin: 0;
             padding: 20px;
@@ -382,19 +356,20 @@ INVOICE_TEMPLATE = """
             margin: 0 auto;
             background: white;
             padding: 30px;
-            border: 1px solid #dcdcdc;
-            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             position: relative;
             overflow: hidden;
         }
+        /* لۆگۆ لە پشتەوە وەک ڤاتەرمارک بە قەبارە و شوێنەکە دیاری کراوە */
         .watermark-logo {
             position: absolute;
-            top: 50%;
+            top: 45%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 320px;
-            opacity: 0.06;
+            width: 250px;
+            opacity: 0.12;
             z-index: 0;
             pointer-events: none;
         }
@@ -404,7 +379,7 @@ INVOICE_TEMPLATE = """
         }
         .header-title {
             text-align: center;
-            color: #2c3e50;
+            color: #1b5e20;
             font-size: 20px;
             font-weight: bold;
             margin-bottom: 5px;
@@ -416,10 +391,13 @@ INVOICE_TEMPLATE = """
             margin-bottom: 15px;
         }
         .note-alert {
-            text-align: left;
-            color: #333;
+            background: #f9fbe7;
+            border: 1px solid #cddc39;
+            padding: 10px;
+            border-radius: 6px;
+            color: #33691e;
             font-size: 13px;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             font-weight: 500;
         }
         .category-section {
@@ -427,11 +405,12 @@ INVOICE_TEMPLATE = """
         }
         .category-title {
             text-align: right;
-            color: #2c3e50;
+            color: #1b5e20;
             font-size: 14px;
             font-weight: bold;
-            margin-bottom: 5px;
-            margin-top: 15px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #c8e6c9;
+            padding-bottom: 3px;
         }
         table {
             width: 100%;
@@ -439,13 +418,13 @@ INVOICE_TEMPLATE = """
             margin-bottom: 10px;
         }
         th, td {
-            border: 1px solid #dcdcdc;
+            border: 1px solid #e0e0e0;
             padding: 8px 12px;
             font-size: 13px;
         }
         th {
-            background-color: #f8f9fa;
-            color: #333;
+            background-color: #f5f5f5;
+            color: #1b5e20;
             font-weight: bold;
             text-align: right;
         }
@@ -477,8 +456,8 @@ INVOICE_TEMPLATE = """
             color: white;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        .print-btn { background: #2c3e50; }
-        .print-btn:hover { background: #1a252f; }
+        .print-btn { background: #1b5e20; }
+        .print-btn:hover { background: #0f3813; }
         .whatsapp-btn { background: #25d366; }
         .whatsapp-btn:hover { background: #1ebe57; }
         
@@ -498,7 +477,7 @@ INVOICE_TEMPLATE = """
 
         {% if user_note %}
         <div class="note-alert">
-            تێبینی: {{ user_note }}
+            📝 تێبینی: {{ user_note }}
         </div>
         {% endif %}
 
@@ -528,7 +507,7 @@ INVOICE_TEMPLATE = """
     </div>
 
     <div class="btn-group">
-        <button class="action-btn print-btn" onclick="window.print()">🖨️ ڤێکرنا PDF / چاپکرن</button>
+        <button class="action-btn print-btn" onclick="window.print()">🖨️ ڤێکرنا قایمەی ب شێوەیەکێ خاوێن</button>
         <button class="action-btn whatsapp-btn" onclick="shareToWhatsApp()">💬 شێرکرن بۆ واتسئەپ</button>
     </div>
 
@@ -576,7 +555,7 @@ SETTINGS_TEMPLATE = """
         button:hover { background: #1b5e20; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 10px; font-size: 13px; text-align: right; }
-        th { background-color: #f5f5f5; color: #2e7d32; }
+        th { background-color: #f5f5f5; color: #1b5e20; }
         .del-btn { background-color: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; display: inline-block; }
     </style>
 </head>
