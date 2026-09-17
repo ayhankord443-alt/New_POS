@@ -17,7 +17,7 @@ app.secret_key = 'organic_juices_secret_key_2026'
 
 SHARED_PASSWORD = "organic123"
 
-# بنکەیا سەرەکی یا بابەتان (جودا بۆ هەر بەشەکی - دەتوانیت خیار یا هەر تشتەکێ دی لێرە زێدە بکەی)
+# بنکەیا سەرەکی یا بابەتان (جودا بۆ هەر بەشەکی - لێرە دەتوانیت هەر بابەتەکی زێدە بکەی)
 ALL_ITEMS = {
     "فێقی": [
         ("خیار", "کیلو"), ("نافوكادو", "کیلو"), ("مانكو", "کیلو"), ("موز", "کارتۆن"), 
@@ -237,7 +237,7 @@ HTML_TEMPLATE = """
                     <input type="hidden" name="unit" value="{{ unit }}">
                     <input type="hidden" name="category" value="{{ cat }}">
                     <button type="button" class="qty-btn" onclick="adjustQty(this, -1)">-</button>
-                    <input type="number" name="quantity" value="1" step="any" class="qty-input" id="qty_{{ loop.index0 }}_{{ cat }}">
+                    <input type="number" name="quantity" value="1" step="any" class="qty-input">
                     <button type="button" class="qty-btn" onclick="adjustQty(this, 1)">+</button>
                     <button type="submit" class="btn-add">زێدەکه</button>
                 </form>
