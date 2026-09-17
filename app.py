@@ -2,6 +2,15 @@ import os
 import sqlite3
 from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 app = Flask(__name__)
 app.secret_key = 'organic_juices_secret_key_2026'
@@ -76,6 +85,12 @@ def get_all_items_dict():
             items_dict[cat] = []
         items_dict[cat].append((name, unit))
     return items_dict
+
+def reshape_text(text):
+    if not text:
+        return ""
+    reshaped = arabic_reshaper.reshape(str(text))
+    return get_display(reshaped)
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -171,47 +186,73 @@ HTML_TEMPLATE = """
     <link rel="apple-touch-icon" href="/logo.png">
 
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 10px; text-align: center; color: #1a1a1a; }
-        .header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; }
-        .header h1 { margin: 0; font-size: 16px; color: #1b5e20; }
-        .nav-links { display: flex; gap: 8px; }
-        .nav-link { background: #2e7d32; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold; }
-        .logout-btn { background: #c62828; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #ffffff; 
+            margin: 0; 
+            padding: 15px; 
+            text-align: center; 
+            color: #1a1a1a;
+            position: relative;
+        }
+        body::before {
+            content: "";
+            background-image: url('/logo.png');
+            background-repeat: no-repeat;
+            background-position: center top 130px;
+            background-size: 280px;
+            opacity: 0.08;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            z-index: -1;
+        }
+        .brand-header { 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px; 
+            padding-bottom: 10px;
+            border-bottom: 3px solid #2e7d32;
+        }
+        .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
+        .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+        .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
+        .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         
-        .note-box { background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; text-align: right; }
-        .note-box textarea { width: 100%; height: 50px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+        .note-box { background: #f9fbe7; border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
+        .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
 
-        .section-title { text-align: right; margin: 20px 5px 10px 5px; color: #1b5e20; font-size: 16px; font-weight: bold; border-bottom: 2px solid #c8e6c9; padding-bottom: 4px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 10px; }
-        .item-card { background: white; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #eee; }
+        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .item-card { background: #ffffff; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
         .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
-        .unit-tag { font-size: 11px; color: #666; margin-bottom: 6px; }
+        .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
         .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
-        .qty-btn { background: #f0f0f0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; }
-        .qty-btn:active { background: #ddd; }
+        .qty-btn { background: #e0e0e0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; color: #333; }
+        .qty-btn:active { background: #ccc; }
         .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
         .btn-add.added { background: #388e3c; transform: scale(0.96); }
-        .order-summary { background: white; border-radius: 8px; padding: 15px; margin-top: 20px; text-align: right; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; margin-top: 10px; cursor: pointer; }
-        .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 8px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; font-size: 13px; }
+        .order-summary { background: #ffffff; border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
+        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
+        .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; font-size: 13px; }
-        th { background-color: #f5f5f5; color: #1b5e20; }
+        th { background-color: #f5f5f5; color: #2e7d32; }
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="brand-header">
         <h1>کۆمپانییا ئورگانیک جویس</h1>
-        <div class="nav-links">
-            <a href="/settings" class="nav-link">⚙️ سێتینگ</a>
+        <div class="user-panel">
+            <a href="/settings" class="nav-link">⚙️ سێتینگ (زێدەکرن و ژێبرن)</a>
             <a href="/logout" class="logout-btn">چوونەدەروون</a>
         </div>
     </div>
 
     <div class="note-box">
-        <label for="noteInput" style="font-weight: bold; color: #1b5e20; font-size: 12px; display: block; margin-bottom: 4px;">📝 تێبینی (ل سەر قایمەی دێ دیار بیت):</label>
+        <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر PDF و لیستێ دێ دیار بیت):</label>
         <textarea id="noteInput" placeholder="تێبینییا خۆ لێرە بنڤیسە...">{{ current_note }}</textarea>
         <button type="button" class="note-save-btn" onclick="saveNote()">تومارکرنا تێبینیێ</button>
     </div>
@@ -240,7 +281,7 @@ HTML_TEMPLATE = """
     {% endfor %}
 
     <div class="order-summary" id="orderSummaryContainer" style="display: {% if orders %}block{% else %}none{% endif %};">
-        <h3 style="margin: 0 0 10px 0; color: #1b5e20; font-size: 15px;">📋 لیستا داواکری (قایمە):</h3>
+        <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری (قایمە):</h3>
         <table id="ordersTable">
             <thead>
                 <tr>
@@ -259,7 +300,7 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </tbody>
         </table>
-        <button type="button" class="pdf-btn" onclick="openInvoicePage()">📄 ڤێکرنا قایمەی ب شێوەیەکێ خاوێن</button>
+        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF (ئاسویی)</button>
         <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
 
@@ -326,211 +367,21 @@ HTML_TEMPLATE = """
             `).join('');
         }
 
-        function openInvoicePage() {
-            window.open('/invoice_view', '_blank');
-        }
-    </script>
-</body>
-</html>
-"""
-
-INVOICE_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ku" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic_Juices_Qayma</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #f7f9f6;
-            color: #1a1a1a;
-            margin: 0;
-            padding: 20px;
-            direction: rtl;
-            text-align: right;
-        }
-        .invoice-container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        }
-        /* لۆگۆ لە پشتەوە وەک ڤاتەرمارک بە قەبارە و شوێنەکە دیاری کراوە */
-        .watermark-logo {
-            position: absolute;
-            top: 45%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 250px;
-            opacity: 0.12;
-            z-index: 0;
-            pointer-events: none;
-        }
-        .invoice-container * {
-            position: relative;
-            z-index: 1;
-        }
-        .header-title {
-            text-align: center;
-            color: #1b5e20;
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .header-date {
-            text-align: center;
-            color: #555;
-            font-size: 12px;
-            margin-bottom: 15px;
-        }
-        .note-alert {
-            background: #f9fbe7;
-            border: 1px solid #cddc39;
-            padding: 10px;
-            border-radius: 6px;
-            color: #33691e;
-            font-size: 13px;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-        .category-section {
-            margin-bottom: 20px;
-        }
-        .category-title {
-            text-align: right;
-            color: #1b5e20;
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 6px;
-            border-bottom: 1px solid #c8e6c9;
-            padding-bottom: 3px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 10px;
-        }
-        th, td {
-            border: 1px solid #e0e0e0;
-            padding: 8px 12px;
-            font-size: 13px;
-        }
-        th {
-            background-color: #f5f5f5;
-            color: #1b5e20;
-            font-weight: bold;
-            text-align: right;
-        }
-        td:nth-child(2) {
-            text-align: center;
-            width: 90px;
-        }
-        td:nth-child(3) {
-            text-align: right;
-            width: 110px;
-        }
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 25px;
-            max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .action-btn {
-            flex: 1;
-            padding: 12px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            border: none;
-            text-align: center;
-            color: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .print-btn { background: #1b5e20; }
-        .print-btn:hover { background: #0f3813; }
-        .whatsapp-btn { background: #25d366; }
-        .whatsapp-btn:hover { background: #1ebe57; }
-        
-        @media print {
-            .btn-group { display: none; }
-            body { background: white; padding: 0; }
-            .invoice-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
-        }
-    </style>
-</head>
-<body>
-    <div class="invoice-container" id="printableArea">
-        <img src="/logo.png" class="watermark-logo" alt="Logo">
-
-        <div class="header-title">کۆمپانییا ئورگانیک جویس - قایما داواکری</div>
-        <div class="header-date">Date: {{ current_date }}</div>
-
-        {% if user_note %}
-        <div class="note-alert">
-            📝 تێبینی: {{ user_note }}
-        </div>
-        {% endif %}
-
-        {% for cat_name, cat_items in categories.items() %}
-        <div class="category-section">
-            <div class="category-title">بەش: {{ cat_name }}</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>بابەت</th>
-                        <th>بڕ</th>
-                        <th>یەکە</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in cat_items %}
-                    <tr>
-                        <td>{{ item.item_name }}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>{{ item.unit }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="btn-group">
-        <button class="action-btn print-btn" onclick="window.print()">🖨️ ڤێکرنا قایمەی ب شێوەیەکێ خاوێن</button>
-        <button class="action-btn whatsapp-btn" onclick="shareToWhatsApp()">💬 شێرکرن بۆ واتسئەپ</button>
-    </div>
-
-    <script>
-        function shareToWhatsApp() {
-            let text = "📋 *کۆمپانییا ئورگانیک جویس - قایما داواکری*\\n";
-            text += "📅 دیرۆک: {{ current_date }}\\n";
-            
-            {% if user_note %}
-            text += "📝 تێبینی: {{ user_note }}\\n";
-            {% endif %}
-            text += "----------------------------------\\n";
-
-            {% for cat_name, cat_items in categories.items() %}
-            text += "🔹 *بەش: {{ cat_name }}*\\n";
-            {% for item in cat_items %}
-            text += "▫️ " + "{{ item.item_name }}" + " : *" + "{{ item.quantity }}" + "* (" + "{{ item.unit }}" + ")\\n";
-            {% endfor %}
-            text += "\\n";
-            {% endfor %}
-
-            let encodedText = encodeURIComponent(text);
-            window.open("https://wa.me/?text=" + encodedText, "_blank");
+        async function shareInvoicePDF() {
+            try {
+                let response = await fetch('/download_pdf');
+                let blob = await response.blob();
+                let file = new File([blob], "Organic_Juices_Qayma.pdf", { type: "application/pdf" });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ title: 'پسولتا فرۆتنێ', text: 'فەرموو پسولتا تە یا ئۆرگانیک جویس', files: [file] });
+                } else {
+                    let url = URL.createObjectURL(blob);
+                    let a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Organic_Juices_Qayma.pdf';
+                    a.click();
+                }
+            } catch (error) { window.location.href = '/download_pdf'; }
         }
     </script>
 </body>
@@ -555,7 +406,7 @@ SETTINGS_TEMPLATE = """
         button:hover { background: #1b5e20; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 10px; font-size: 13px; text-align: right; }
-        th { background-color: #f5f5f5; color: #1b5e20; }
+        th { background-color: #f5f5f5; color: #2e7d32; }
         .del-btn { background-color: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; display: inline-block; }
     </style>
 </head>
@@ -613,6 +464,28 @@ SETTINGS_TEMPLATE = """
 </body>
 </html>
 """
+
+class NumberedCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+    def save(self):
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_decorations()
+            super().showPage()
+        super().save()
+    def draw_page_decorations(self):
+        logo_path = os.path.join(os.getcwd(), 'logo.png')
+        if os.path.exists(logo_path):
+            self.saveState()
+            if hasattr(self, 'setFillAlpha'):
+                self.setFillAlpha(0.08)
+            self.drawImage(logo_path, 270, 147, width=300, height=300, preserveAspectRatio=True, mask='auto')
+            self.restoreState()
 
 def get_device_id():
     if 'device_id' not in session:
@@ -742,8 +615,8 @@ def clear_ajax():
     conn.close()
     return jsonify({"status": "success", "orders": []})
 
-@app.route('/invoice_view')
-def invoice_view():
+@app.route('/download_pdf')
+def download_pdf():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
     
@@ -751,15 +624,90 @@ def invoice_view():
     orders = get_orders_list(device_id)
     user_note = get_note(device_id)
     
+    font_font_name = 'Helvetica'
+    for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
+                font_font_name = 'ArabicFont'
+                break
+            except: continue
+
+    pdf_filename = f"Organic_Juices_Qayma.pdf"
+    doc = SimpleDocTemplate(pdf_filename, pagesize=landscape(A4), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
+    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=12, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'), leading=16)
+    section_heading_style = ParagraphStyle('SHS', parent=styles['Heading2'], alignment=2, fontSize=14, fontName=font_font_name, textColor=colors.HexColor('#2e7d32'), spaceBefore=10, spaceAfter=5)
+    
+    # لێرەدا چارەسەرا ڕاستکردنا فۆنتی هاتییە کرن داكو پەیڤ و ڕستە ب شێوەیەکێ دروست و سروشتی بچنە ناو فایلا PDFێ بێ سەروبن بوون
+    header_right_style = ParagraphStyle('HRS', parent=styles['Normal'], alignment=2, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    header_center_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    header_left_style = ParagraphStyle('HLS', parent=styles['Normal'], alignment=0, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+
+    cell_right_style = ParagraphStyle('CRS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name)
+    cell_center_style = ParagraphStyle('CCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name)
+    cell_left_style = ParagraphStyle('CLS', parent=styles['Normal'], alignment=0, fontSize=10, fontName=font_font_name)
+    
+    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس - قایما داواکری')}</b>", title_style))
+    story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
+    
+    if user_note:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
+        
+    story.append(Spacer(1, 10))
+    
     categories = {}
     for item in orders:
         cat = item["category"]
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(item)
+    
+    col_widths = [300, 221, 220] 
+    
+    for cat_name, cat_items in categories.items():
+        cat_story = []
+        cat_story.append(Paragraph(f"<b>{reshape_text('بەش: ')}{reshape_text(cat_name)}</b>", section_heading_style))
         
-    current_date = datetime.now().strftime('%Y-%m-%d %H:%M')
-    return render_template_string(INVOICE_TEMPLATE, categories=categories, user_note=user_note, current_date=current_date)
+        table_headers = [
+            Paragraph(reshape_text("بابەت"), header_right_style),
+            Paragraph(reshape_text("بڕ"), header_center_style),
+            Paragraph(reshape_text("یەکە"), header_left_style)
+        ]
+        
+        table_data = [table_headers]
+        
+        for item in cat_items:
+            row = [
+                Paragraph(reshape_text(str(item["item_name"])), cell_right_style),
+                Paragraph(str(item["quantity"]), cell_center_style),
+                Paragraph(reshape_text(str(item["unit"])), cell_left_style)
+            ]
+            table_data.append(row)
+            
+        t = Table(table_data, colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('LEFTPADDING', (0,0), (-1,-1), 8),
+            ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ]))
+        
+        cat_story.append(t)
+        cat_story.append(Spacer(1, 10))
+        story.append(KeepTogether(cat_story))
+        
+    doc.build(story, canvasmaker=NumberedCanvas)
+    return send_file(pdf_filename, as_attachment=True)
 
 if __name__ == "__main__":
     init_db()
