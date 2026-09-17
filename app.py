@@ -220,7 +220,7 @@ HTML_TEMPLATE = """
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
         .btn-add.added { background: #388e3c; transform: scale(0.96); }
         .order-summary { background: #ffffff; border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
-        .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
+        .pdf-btn { background: #2c3e50; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
         .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; font-size: 13px; }
@@ -285,7 +285,7 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </tbody>
         </table>
-        <button type="button" class="pdf-btn" onclick="openInvoicePage()">📄 ڤێکرنا قایمەی ب شێوەیەکێ خاوێن و سەد لە سەد ڕاست</button>
+        <button type="button" class="pdf-btn" onclick="openInvoicePage()">📄 ڤێکرنا قایمەی ب شێوەیەکێ خاوێن</button>
         <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
 
@@ -366,11 +366,11 @@ INVOICE_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>قایما داواکری - ئۆرگانیک جویس</title>
+    <title>Organic_Juices_Qayma</title>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            background: #ffffff;
+            background: #f0f0f0;
             color: #1a1a1a;
             margin: 0;
             padding: 20px;
@@ -381,96 +381,120 @@ INVOICE_TEMPLATE = """
             max-width: 800px;
             margin: 0 auto;
             background: white;
-            padding: 25px;
-            border: 2px solid #2e7d32;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 30px;
+            border: 1px solid #dcdcdc;
+            border-radius: 4px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        }
+        .watermark-logo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 320px;
+            opacity: 0.06;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .invoice-container * {
+            position: relative;
+            z-index: 1;
         }
         .header-title {
             text-align: center;
-            color: #1b5e20;
-            font-size: 24px;
-            font-weight: 900;
+            color: #2c3e50;
+            font-size: 20px;
+            font-weight: bold;
             margin-bottom: 5px;
         }
         .header-date {
             text-align: center;
-            color: #558b2f;
-            font-size: 13px;
-            margin-bottom: 20px;
+            color: #555;
+            font-size: 12px;
+            margin-bottom: 15px;
         }
         .note-alert {
-            background: #ffebee;
-            color: #c62828;
-            padding: 10px 15px;
-            border-radius: 6px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            border: 1px solid #ffcdd2;
+            text-align: left;
+            color: #333;
+            font-size: 13px;
+            margin-bottom: 15px;
+            font-weight: 500;
         }
         .category-section {
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         .category-title {
-            color: #2e7d32;
-            font-size: 18px;
+            text-align: right;
+            color: #2c3e50;
+            font-size: 14px;
             font-weight: bold;
-            border-bottom: 2px solid #2e7d32;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
+            margin-top: 15px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         th, td {
-            border: 1px solid #ddd;
-            padding: 10px 12px;
-            font-size: 14px;
+            border: 1px solid #dcdcdc;
+            padding: 8px 12px;
+            font-size: 13px;
         }
         th {
-            background-color: #f1f8e9;
-            color: #1b5e20;
+            background-color: #f8f9fa;
+            color: #333;
             font-weight: bold;
+            text-align: right;
         }
         td:nth-child(2) {
             text-align: center;
-            width: 100px;
-            font-weight: bold;
+            width: 90px;
+        }
+        td:nth-child(3) {
+            text-align: right;
+            width: 110px;
         }
         .btn-group {
             display: flex;
             gap: 10px;
-            margin-top: 20px;
+            margin-top: 25px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
         }
         .action-btn {
             flex: 1;
-            padding: 14px;
-            font-size: 15px;
+            padding: 12px;
+            font-size: 14px;
             font-weight: bold;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             border: none;
             text-align: center;
             color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        .print-btn { background: #1b5e20; }
-        .print-btn:hover { background: #2e7d32; }
+        .print-btn { background: #2c3e50; }
+        .print-btn:hover { background: #1a252f; }
         .whatsapp-btn { background: #25d366; }
         .whatsapp-btn:hover { background: #1ebe57; }
         
         @media print {
             .btn-group { display: none; }
-            body { padding: 0; }
-            .invoice-container { border: none; box-shadow: none; padding: 0; }
+            body { background: white; padding: 0; }
+            .invoice-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
         }
     </style>
 </head>
 <body>
     <div class="invoice-container" id="printableArea">
+        <img src="/logo.png" class="watermark-logo" alt="Logo">
+
         <div class="header-title">کۆمپانییا ئورگانیک جویس - قایما داواکری</div>
-        <div class="header-date">دیرۆک و دەم: {{ current_date }}</div>
+        <div class="header-date">Date: {{ current_date }}</div>
 
         {% if user_note %}
         <div class="note-alert">
@@ -492,7 +516,7 @@ INVOICE_TEMPLATE = """
                 <tbody>
                     {% for item in cat_items %}
                     <tr>
-                        <td><b>{{ item.item_name }}</b></td>
+                        <td>{{ item.item_name }}</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ item.unit }}</td>
                     </tr>
@@ -504,7 +528,7 @@ INVOICE_TEMPLATE = """
     </div>
 
     <div class="btn-group">
-        <button class="action-btn print-btn" onclick="window.print()">🖨️ چاپکرن / PDF</button>
+        <button class="action-btn print-btn" onclick="window.print()">🖨️ ڤێکرنا PDF / چاپکرن</button>
         <button class="action-btn whatsapp-btn" onclick="shareToWhatsApp()">💬 شێرکرن بۆ واتسئەپ</button>
     </div>
 
@@ -521,7 +545,7 @@ INVOICE_TEMPLATE = """
             {% for cat_name, cat_items in categories.items() %}
             text += "🔹 *بەش: {{ cat_name }}*\\n";
             {% for item in cat_items %}
-            text += "▫️ {{ item.item_name }} : *{{ item.quantity }}* ({{ item.unit }})\\n";
+            text += "▫️ " + "{{ item.item_name }}" + " : *" + "{{ item.quantity }}" + "* (" + "{{ item.unit }}" + ")\\n";
             {% endfor %}
             text += "\\n";
             {% endfor %}
