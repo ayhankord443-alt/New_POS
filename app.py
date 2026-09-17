@@ -333,9 +333,6 @@ SETTINGS_TEMPLATE = """
 </html>
 """
 
-class NumberedCanvas(canvas.Canvas if 'canvas' in globals() else object):
-    pass
-
 # Safe Canvas for Watermark Logo in PDF
 from reportlab.pdfgen import canvas as rl_canvas
 class WatermarkCanvas(rl_canvas.Canvas):
@@ -467,7 +464,7 @@ def get_logo():
 
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}}, 401
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     try:
         conn = sqlite3.connect("clean_qayma.db")
@@ -480,7 +477,7 @@ def quick_add_ajax():
 
 @app.route('/clear_ajax')
 def clear_ajax():
-    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}}, 401
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     try:
         conn = sqlite3.connect("clean_qayma.db")
