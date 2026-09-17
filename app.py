@@ -195,7 +195,6 @@ HTML_TEMPLATE = """
             color: #1a1a1a;
             position: relative;
         }
-        /* لۆگۆیا ئورگانیک ل پاشبنەمایێ شاشێ ب ڕوونی و گەورە */
         body::before {
             content: "";
             background-image: url('/logo.png');
@@ -213,10 +212,9 @@ HTML_TEMPLATE = """
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px; 
-            padding-bottom: 10px;
+            padding: 10px;
             border-bottom: 3px solid #2e7d32;
             background: rgba(255, 255, 255, 0.9);
-            padding: 10px;
             border-radius: 8px;
         }
         .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
@@ -228,7 +226,7 @@ HTML_TEMPLATE = """
         .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
 
-        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; background: rgba(255,255,255,0.8); padding-right: 5px; border-radius: 4px; }
+        .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding: 4px 5px; background: rgba(255,255,255,0.8); border-radius: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .item-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
         .item-name { font-weight: bold; font-size: 13px; margin-bottom: 2px; color: #111; }
@@ -546,7 +544,7 @@ def index():
 @app.route('/save_note', methods=['POST'])
 def save_note():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+        return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     note_text = request.form.get('note', '')
     conn = sqlite3.connect("clean_qayma.db")
@@ -614,7 +612,7 @@ def quick_add_ajax():
 @app.route('/clear_ajax')
 def clear_ajax():
     if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+        return jsonify({"status": "unauthorized"}}, 401
     device_id = get_device_id()
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -650,7 +648,8 @@ def download_pdf():
     subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
     note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
     header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=9, fontName=font_font_name)
+    
+    # ستاڵی نوێ بۆ ناڤ و یەکە: ناڤ ل ڕاستێ (alignment=2) و یەکە ل چەپێ (alignment=0) ب ڕێکا تابلۆیا ناڤخویی (Nested Table) د ناو PDF دا
     
     story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
@@ -677,10 +676,23 @@ def download_pdf():
             items_in_cat = items_dict.get(cat, [])
             if i < len(items_in_cat):
                 item_name, unit = items_in_cat[i]
-                text_cell = f"{reshape_text(item_name)} ({reshape_text(unit)})  ✓"
-                row.append(Paragraph(text_cell, cell_style))
+                
+                # دروستکرنا خشتەیەکا تەسوک د ناڤ خشتەی دا دا ناڤ بچیتە ڕاستێ و یەکە بچیتە چەپێ ب رێکوپێکی
+                name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_font_name, fontSize=9, alignment=2))
+                unit_para = Paragraph(f"<font color='#666'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_font_name, fontSize=8, alignment=0))
+                
+                cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
+                cell_table.setStyle(TableStyle([
+                    ('ALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), 0),
+                ]))
+                row.append(cell_table)
             else:
-                row.append(Paragraph("", cell_style))
+                row.append(Paragraph("", header_cell_style))
         table_data.append(row)
         
     col_width = 560 / 3
@@ -689,13 +701,13 @@ def download_pdf():
     t = Table(table_data, colWidths=col_widths)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
-        ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('TOPPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING', (0,0), (-1,-1), 6),
-        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('LEFTPADDING', (0,0), (-1,-1), 4),
+        ('RIGHTPADDING', (0,0), (-1,-1), 4),
     ]))
     
     story.append(t)
