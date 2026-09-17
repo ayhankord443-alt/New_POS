@@ -3,20 +3,6 @@ import sqlite3
 from datetime import datetime
 from flask import Flask, render_template_string, request, send_file, redirect, url_for, send_from_directory, jsonify, session
 
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.pdfgen import canvas
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = True
-
 app = Flask(__name__)
 app.secret_key = 'organic_juices_secret_key_2026'
 
@@ -76,7 +62,7 @@ def init_db():
             conn.commit()
         conn.close()
     except Exception as e:
-        print("DB Init Error:", e)
+        print("DB Error:", e)
 
 init_db()
 
@@ -101,6 +87,8 @@ def reshape_text(text):
     if not text:
         return ""
     try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
         reshaped = arabic_reshaper.reshape(str(text))
         return get_display(reshaped)
     except:
@@ -120,68 +108,19 @@ LOGIN_TEMPLATE = """
         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
         button { width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         button:hover { background: #1b5e20; }
-        .bio-btn { background: #1b5e20; margin-top: 8px; display: none; font-size: 16px; padding: 14px; }
         .error { color: #c62828; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>ئۆرگانیک جویس</h2>
-        <p style="color: #555; margin-top: 0; font-size: 13px;">جارا ئێكێ ڕەمزی گشتی بنڤیسە، ژ بۆ جارێن داهاتی ب فەیس ئایدی / پەنجەمۆر بچۆ ژوورەوە</p>
+        <p style="color: #555; margin-top: 0; font-size: 13px;">ڕەمزی گشتی بنڤیسە دا بچی ژوورەوە</p>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <form method="POST" id="loginForm">
-            <input type="password" name="password" id="passwordInput" placeholder="ڕەمز (Password)" required>
-            <button type="submit">چوونەژوورەوە ب ڕەمز</button>
+        <form method="POST">
+            <input type="password" name="password" placeholder="ڕەمز (Password)" required>
+            <button type="submit">چوونەژوورەوە</button>
         </form>
-        <button type="button" id="bioBtn" class="bio-btn" onclick="loginWithBiometric()">🔒 چوونەژوورەوە ب فەیس ئایدی / پەنجەمۆر</button>
     </div>
-
-    <script>
-        document.addEventListener("DOMContentLoaded", async () => {
-            let savedPass = localStorage.getItem("organic_saved_pass");
-            let bioRegistered = localStorage.getItem("organic_bio_registered");
-            if (savedPass) {
-                document.getElementById("bioBtn").style.display = "block";
-                if (bioRegistered === "true") { setTimeout(loginWithBiometric, 400); }
-            }
-        });
-        document.getElementById("loginForm").addEventListener("submit", () => {
-            let pass = document.getElementById("passwordInput").value;
-            if(pass) {
-                localStorage.setItem("organic_saved_pass", pass);
-                localStorage.setItem("organic_bio_registered", "true");
-            }
-        });
-        async function loginWithBiometric() {
-            let savedPass = localStorage.getItem("organic_saved_pass");
-            if (!savedPass) return;
-            try {
-                if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-                    let available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                    if (available) {
-                        const challenge = new Uint8Array([19, 21, 31, 41, 51, 61, 71, 81]);
-                        await navigator.credentials.create({
-                            publicKey: {
-                                rp: { name: "Organic Juices Cashier" },
-                                user: { id: new Uint8Array([1, 2, 3, 4, 5]), name: "cashier", displayName: "Organic Cashier" },
-                                challenge: challenge,
-                                pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-                                timeout: 60000,
-                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" }
-                            }
-                        });
-                    }
-                }
-            } catch (e) {}
-            let form = document.createElement("form");
-            form.method = "POST";
-            let input = document.createElement("input");
-            input.type = "hidden"; input.name = "password"; input.value = savedPass;
-            form.appendChild(input);
-            document.body.appendChild(form);
-            form.submit();
-        }
-    </script>
 </body>
 </html>
 """
@@ -193,53 +132,16 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>کۆمپانییا ئورگانیک جویس</title>
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ئۆرگانیک جویس">
-    <link rel="apple-touch-icon" href="/logo.png">
-
     <style>
-        body { 
-            font-family: system-ui, -apple-system, sans-serif; 
-            background-color: #ffffff; 
-            margin: 0; 
-            padding: 15px; 
-            text-align: center; 
-            color: #1a1a1a;
-            position: relative;
-        }
-        body::before {
-            content: "";
-            background-image: url('/logo.png');
-            background-repeat: no-repeat;
-            background-position: center 180px;
-            background-size: 260px;
-            opacity: 0.12;
-            position: fixed;
-            top: 0; left: 0; bottom: 0; right: 0;
-            z-index: -1;
-            pointer-events: none;
-        }
-        .brand-header { 
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px; 
-            padding: 10px;
-            border-bottom: 3px solid #2e7d32;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 8px;
-        }
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #ffffff; margin: 0; padding: 15px; text-align: center; color: #1a1a1a; }
+        .brand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; border-bottom: 3px solid #2e7d32; background: rgba(255, 255, 255, 0.9); border-radius: 8px; }
         .brand-header h1 { margin: 0; font-size: 18px; font-weight: 900; color: #1b5e20; }
         .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
         .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
-        
         .note-box { background: rgba(249, 251, 231, 0.95); border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
-        .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+        .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
         .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
-
         .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding: 4px 5px; background: rgba(255,255,255,0.8); border-radius: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .item-card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
@@ -247,10 +149,8 @@ HTML_TEMPLATE = """
         .unit-tag { font-size: 11px; color: #558b2f; font-weight: 600; margin-bottom: 6px; }
         .btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
         .qty-btn { background: #e0e0e0; border: none; font-weight: bold; width: 26px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 14px; color: #333; }
-        .qty-btn:active { background: #ccc; }
         .qty-input { width: 34px; padding: 4px 1px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; }
         .btn-add { background: #2e7d32; color: white; border: none; padding: 6px 4px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; flex: 1; }
-        .btn-add.added { background: #388e3c; transform: scale(0.96); }
         .order-summary { background: rgba(255, 255, 255, 0.98); border-radius: 10px; padding: 15px; margin-top: 25px; text-align: right; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #2e7d32; }
         .pdf-btn { background: #1b5e20; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; margin-top: 10px; cursor: pointer; }
         .clear-btn { background-color: #c62828; color: white; width: 100%; padding: 9px; border: none; border-radius: 6px; font-weight: bold; margin-top: 6px; cursor: pointer; }
@@ -269,8 +169,8 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="note-box">
-        <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر PDF و لیستێ دێ دیار بیت):</label>
-        <textarea id="noteInput" placeholder="تێبینییا خۆ لێرە بنڤیسە...">{{ current_note }}</textarea>
+        <label style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی:</label>
+        <textarea id="noteInput">{{ current_note }}</textarea>
         <button type="button" class="note-save-btn" onclick="saveNote()">تومارکرنا تێبینیێ</button>
     </div>
 
@@ -299,7 +199,7 @@ HTML_TEMPLATE = """
 
     <div class="order-summary" id="orderSummaryContainer" style="display: {% if orders %}block{% else %}none{% endif %};">
         <h3 style="margin: 0 0 10px 0; color: #1b5e20;">📋 لیستا داواکری:</h3>
-        <table id="ordersTable">
+        <table>
             <thead>
                 <tr>
                     <th>بەش</th>
@@ -319,89 +219,42 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </tbody>
         </table>
-        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 شێرکرن و داگرتنا فایلا PDF</button>
+        <button type="button" class="pdf-btn" onclick="shareInvoicePDF()">📄 داگرتنا PDF</button>
         <button type="button" class="clear-btn" onclick="clearOrdersAjax()">🗑️ پاککرنا قایمەی</button>
     </div>
 
     <script>
         function adjustQty(btn, amount) {
             let input = btn.parentElement.querySelector('.qty-input');
-            let currentVal = parseFloat(input.value) || 1;
-            let newVal = currentVal + amount;
-            if (newVal < 0.1) newVal = 0.1;
-            input.value = newVal;
+            let val = parseFloat(input.value) || 1;
+            input.value = Math.max(0.1, val + amount);
         }
-
         async function saveNote() {
-            let noteText = document.getElementById('noteInput').value;
-            let formData = new FormData();
-            formData.append('note', noteText);
-            try {
-                let response = await fetch('/save_note', { method: 'POST', body: formData });
-                let data = await response.json();
-                if(data.status === 'success') {
-                    alert('تێبینی ب سەرکەفتیانە هاتە تومارکرن!');
-                }
-            } catch(e) { console.error(e); }
+            let note = document.getElementById('noteInput').value;
+            let fd = new FormData(); fd.append('note', note);
+            await fetch('/save_note', { method: 'POST', body: fd });
+            alert('تێبینی هاتە تومارکرن!');
         }
-
-        async function quickAddAjax(event, form) {
-            event.preventDefault();
-            let formData = new FormData(form);
-            let btn = form.querySelector('.btn-add');
-            try {
-                let response = await fetch('/quick_add_ajax', { method: 'POST', body: formData });
-                let data = await response.json();
-                if (data.status === 'success') {
-                    updateOrdersTable(data.orders);
-                    btn.classList.add('added');
-                    setTimeout(() => btn.classList.remove('added'), 300);
-                }
-            } catch (err) { console.error(err); }
+        async function quickAddAjax(e, form) {
+            e.preventDefault();
+            let res = await fetch('/quick_add_ajax', { method: 'POST', body: new FormData(form) });
+            let data = await res.json();
+            if(data.status === 'success') updateOrdersTable(data.orders);
         }
-
         async function clearOrdersAjax() {
-            try {
-                let response = await fetch('/clear_ajax');
-                let data = await response.json();
-                if (data.status === 'success') { updateOrdersTable([]); }
-            } catch (err) { console.error(err); }
+            let res = await fetch('/clear_ajax');
+            let data = await res.json();
+            if(data.status === 'success') updateOrdersTable([]);
         }
-
         function updateOrdersTable(orders) {
             let container = document.getElementById('orderSummaryContainer');
             let tbody = document.getElementById('ordersTableBody');
-            if (orders.length === 0) {
-                container.style.display = 'none';
-                tbody.innerHTML = '';
-                return;
-            }
+            if (orders.length === 0) { container.style.display = 'none'; tbody.innerHTML = ''; return; }
             container.style.display = 'block';
-            tbody.innerHTML = orders.map(item => `
-                <tr>
-                    <td>${item.category}</td>
-                    <td><b>${item.item_name}</b></td>
-                    <td>${item.quantity}</td>
-                    <td>${item.unit}</td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = orders.map(i => `<tr><td>${i.category}</td><td><b>${i.item_name}</b></td><td>${i.quantity}</td><td>${i.unit}</td></tr>`).join('');
         }
-
         async function shareInvoicePDF() {
-            try {
-                let response = await fetch('/download_pdf');
-                let blob = await response.blob();
-                let file = new File([blob], "Organic_Juices_Qayma.pdf", { type: "application/pdf" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ title: 'پسولتا فرۆتنێ', text: 'فەرموو پسولتا تە یا ئۆرگانیک جویس', files: [file] });
-                } else {
-                    let url = URL.createObjectURL(blob);
-                    let a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'Organic_Juices_Qayma.pdf';
-                    a.click();
-                }
-            } catch (error) { window.location.href = '/download_pdf'; }
+            window.location.href = '/download_pdf';
         }
     </script>
 </body>
@@ -413,102 +266,46 @@ SETTINGS_TEMPLATE = """
 <html lang="ku" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ڕێڤەبرنا بابەتان - سێتینگ</title>
+    <title>سێتینگ</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f7f9f6; margin: 0; padding: 15px; color: #1a1a1a; direction: rtl; text-align: right; }
-        .header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .back-btn { background: #2e7d32; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        h2, h3 { color: #1b5e20; margin-top: 0; }
-        input, select { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        button { background: #2e7d32; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; }
-        button:hover { background: #1b5e20; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border-bottom: 1px solid #eee; padding: 10px; font-size: 13px; text-align: right; }
-        th { background-color: #f5f5f5; color: #2e7d32; }
-        .del-btn { background-color: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; display: inline-block; }
+        body { font-family: system-ui; background: #f7f9f6; padding: 15px; direction: rtl; text-align: right; }
+        .header { display: flex; justify-content: space-between; background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; }
+        button { background: #2e7d32; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; width: 100%; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: right; }
+        th { background: #f5f5f5; color: #2e7d32; }
+        .del-btn { background: #c62828; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h2 style="margin: 0;">⚙️ سێتینگ: زێدەکرن و ژێبرنا بابەتان</h2>
-        <a href="/" class="back-btn">⬅️ ڤەڕەقین بۆ کاشێرێ</a>
+        <h2 style="margin:0; color:#1b5e20;">⚙️ سێتینگ</h2>
+        <a href="/" style="background:#2e7d32; color:white; padding:8px 15px; border-radius:6px; text-decoration:none;">⬅️ ڤەڕەقین</a>
     </div>
-
     <div class="card">
         <h3>➕ زێدەکرنا بابەتەکێ نوو</h3>
         <form method="POST" action="/add_item_setting">
-            <label>بەش (Category):</label>
-            <select name="category" required>
-                <option value="فێقی">فێقی</option>
-                <option value="مەعمەل">مەعمەل</option>
-                <option value="مەغزەن">مەغزەن</option>
-            </select>
-
-            <label>ناڤێ بابەتی (نموونە: ڕەز):</label>
-            <input type="text" name="item_name" placeholder="ناڤێ بابەتی بنڤیسە" required>
-
-            <label>یەکە (Unit - نموونە: کیلو، دانە):</label>
-            <input type="text" name="unit" placeholder="یەکە بنڤیسە" required>
-
-            <button type="submit">تومارکرن و زێدەکرن</button>
+            <label>بەش:</label>
+            <select name="category"><option value="فێقی">فێقی</option><option value="مەعمەل">مەعمەل</option><option value="مەغزەن">مەغزەن</option></select>
+            <label>ناڤێ بابەتی:</label><input type="text" name="item_name" required>
+            <label>یەکە:</label><input type="text" name="unit" required>
+            <button type="submit">تومارکرن</button>
         </form>
     </div>
-
     <div class="card">
-        <h3>📋 لیستەیا هەمی بابەتێن هەی (بۆ ژێبرنێ)</h3>
+        <h3>📋 لیستەیا بابەتان</h3>
         <table>
-            <thead>
-                <tr>
-                    <th>بەش</th>
-                    <th>ناڤێ بابەتی</th>
-                    <th>یەکە</th>
-                    <th>کردار</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in all_items_list %}
-                <tr>
-                    <td>{{ item[1] }}</td>
-                    <td><b>{{ item[2] }}</b></td>
-                    <td>{{ item[3] }}</td>
-                    <td>
-                        <a href="/delete_item_setting/{{ item[0] }}" class="del-btn" onclick="return confirm('تە مسۆگەر دڤێت ڤی بابەتی ژێببی؟')">ژێبرن 🗑️</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+            <tr><th>بەش</th><th>ناڤ</th><th>یەکە</th><th>کردار</th></tr>
+            {% for item in all_items_list %}
+            <tr><td>{{ item[1] }}</td><td><b>{{ item[2] }}</b></td><td>{{ item[3] }}</td><td><a href="/delete_item_setting/{{ item[0] }}" class="del-btn">ژێبرن</a></td></tr>
+            {% endfor %}
         </table>
     </div>
 </body>
 </html>
 """
-
-class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-    def save(self):
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_page_decorations()
-            super().showPage()
-        super().save()
-    def draw_page_decorations(self):
-        try:
-            logo_path = os.path.join(os.getcwd(), 'logo.png')
-            if os.path.exists(logo_path):
-                self.saveState()
-                if hasattr(self, 'setFillAlpha'):
-                    self.setFillAlpha(0.15)
-                self.drawImage(logo_path, 147, 270, width=300, height=300, preserveAspectRatio=True, mask='auto')
-                self.restoreState()
-        except:
-            pass
 
 def get_device_id():
     if 'device_id' not in session:
@@ -523,8 +320,7 @@ def get_note(device_id):
         row = c.fetchone()
         conn.close()
         return row[0] if row else ""
-    except:
-        return ""
+    except: return ""
 
 def get_orders_list(device_id):
     try:
@@ -534,16 +330,14 @@ def get_orders_list(device_id):
         rows = c.fetchall()
         conn.close()
         return [{"id": r[0], "item_name": r[1], "quantity": r[2], "unit": r[3], "category": r[4]} for r in rows]
-    except:
-        return []
+    except: return []
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
     if request.method == 'POST':
-        password = request.form.get('password', '')
-        if password != SHARED_PASSWORD:
-            error = "ڕەمزی گشتی هەڵەیە!"
+        if request.form.get('password') != SHARED_PASSWORD:
+            error = "ڕەمز هەڵەیە!"
         else:
             session['authenticated'] = True
             get_device_id()
@@ -557,206 +351,161 @@ def logout():
 
 @app.route('/')
 def index():
-    if not session.get('authenticated'):
-        return redirect(url_for('login'))
+    if not session.get('authenticated'): return redirect(url_for('login'))
     device_id = get_device_id()
     raw_orders = get_orders_list(device_id)
     tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
-    items_dict = get_all_items_dict()
-    current_note = get_note(device_id)
-    return render_template_string(HTML_TEMPLATE, all_items=items_dict, orders=tuple_orders, current_note=current_note)
+    return render_template_string(HTML_TEMPLATE, all_items=get_all_items_dict(), orders=tuple_orders, current_note=get_note(device_id))
 
 @app.route('/save_note', methods=['POST'])
 def save_note():
-    if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
-    device_id = get_device_id()
-    note_text = request.form.get('note', '')
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
     try:
         conn = sqlite3.connect("clean_qayma.db")
         c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO notes (device_id, note_text) VALUES (?, ?)", (device_id, note_text))
-        conn.commit()
-        conn.close()
+        c.execute("INSERT OR REPLACE INTO notes (device_id, note_text) VALUES (?, ?)", (get_device_id(), request.form.get('note', '')))
+        conn.commit(); conn.close()
         return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/settings')
 def settings_page():
-    if not session.get('authenticated'):
-        return redirect(url_for('login'))
+    if not session.get('authenticated'): return redirect(url_for('login'))
     try:
         conn = sqlite3.connect("clean_qayma.db")
         c = conn.cursor()
         c.execute("SELECT id, category, item_name, unit FROM items ORDER BY category, id DESC")
-        rows = c.fetchall()
-        conn.close()
-    except:
-        rows = []
+        rows = c.fetchall(); conn.close()
+    except: rows = []
     return render_template_string(SETTINGS_TEMPLATE, all_items_list=rows)
 
 @app.route('/add_item_setting', methods=['POST'])
 def add_item_setting():
-    if not session.get('authenticated'):
-        return redirect(url_for('login'))
-    category = request.form.get('category')
-    item_name = request.form.get('item_name')
-    unit = request.form.get('unit')
-    
-    if category and item_name and unit:
-        try:
-            conn = sqlite3.connect("clean_qayma.db")
-            c = conn.cursor()
-            c.execute("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", (category, item_name, unit))
-            conn.commit()
-            conn.close()
-        except:
-            pass
+    if not session.get('authenticated'): return redirect(url_for('login'))
+    try:
+        conn = sqlite3.connect("clean_qayma.db")
+        c = conn.cursor()
+        c.execute("INSERT INTO items (category, item_name, unit) VALUES (?, ?, ?)", 
+                  (request.form.get('category'), request.form.get('item_name'), request.form.get('unit')))
+        conn.commit(); conn.close()
+    except: pass
     return redirect(url_for('settings_page'))
 
 @app.route('/delete_item_setting/<int:item_id>')
 def delete_item_setting(item_id):
-    if not session.get('authenticated'):
-        return redirect(url_for('login'))
+    if not session.get('authenticated'): return redirect(url_for('login'))
     try:
         conn = sqlite3.connect("clean_qayma.db")
         c = conn.cursor()
         c.execute("DELETE FROM items WHERE id = ?", (item_id,))
-        conn.commit()
-        conn.close()
-    except:
-        pass
+        conn.commit(); conn.close()
+    except: pass
     return redirect(url_for('settings_page'))
 
 @app.route('/logo.png')
 def get_logo():
-    try:
-        return send_from_directory(os.getcwd(), 'logo.png')
-    except:
-        return "", 404
+    try: return send_from_directory(os.getcwd(), 'logo.png')
+    except: return "", 404
 
 @app.route('/quick_add_ajax', methods=['POST'])
 def quick_add_ajax():
-    if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     try:
         conn = sqlite3.connect("clean_qayma.db")
         c = conn.cursor()
         c.execute("INSERT INTO orders (device_id, item_name, quantity, unit, category) VALUES (?, ?, ?, ?, ?)", 
                   (device_id, request.form['item_name'], float(request.form['quantity']), request.form['unit'], request.form['category']))
-        conn.commit()
-        conn.close()
+        conn.commit(); conn.close()
         return jsonify({"status": "success", "orders": get_orders_list(device_id)})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/clear_ajax')
 def clear_ajax():
-    if not session.get('authenticated'):
-        return jsonify({"status": "unauthorized"}), 401
+    if not session.get('authenticated'): return jsonify({"status": "unauthorized"}), 401
     device_id = get_device_id()
     try:
         conn = sqlite3.connect("clean_qayma.db")
         c = conn.cursor()
         c.execute("DELETE FROM orders WHERE device_id = ?", (device_id,))
-        conn.commit()
-        conn.close()
+        conn.commit(); conn.close()
         return jsonify({"status": "success", "orders": []})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/download_pdf')
 def download_pdf():
-    if not session.get('authenticated'):
-        return redirect(url_for('login'))
-    
-    device_id = get_device_id()
-    items_dict = get_all_items_dict()
-    user_note = get_note(device_id)
-    
-    font_name = 'Helvetica'
-    for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
-        if os.path.exists(font_path):
-            try:
-                pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
-                font_name = 'ArabicFont'
-                break
-            except: 
-                pass
+    if not session.get('authenticated'): return redirect(url_for('login'))
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        
+        device_id = get_device_id()
+        items_dict = get_all_items_dict()
+        user_note = get_note(device_id)
+        
+        font_name = 'Helvetica'
+        for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
+            if os.path.exists(font_path):
+                try:
+                    pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
+                    font_name = 'ArabicFont'
+                    break
+                except: pass
 
-    pdf_filename = "Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
-    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#33691e'))
-    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_name, textColor=colors.HexColor('#b71c1c'))
-    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
-    
-    story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
-    story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
-    
-    if user_note:
-        story.append(Spacer(1, 6))
-        story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
+        pdf_filename = "Organic_Juices_Qayma.pdf"
+        doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
+        story = []
+        styles = getSampleStyleSheet()
         
-    story.append(Spacer(1, 10))
-    
-    categories = ["فێقی", "مەعمەل", "مەغزەن"]
-    
-    table_headers = []
-    for cat in categories:
-        table_headers.append(Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style))
-    
-    max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
-    
-    table_data = [table_headers]
-    
-    for i in range(max_rows):
-        row = []
-        for cat in categories:
-            items_in_cat = items_dict.get(cat, [])
-            if i < len(items_in_cat):
-                item_name, unit = items_in_cat[i]
-                
-                name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=9, alignment=2))
-                unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=8, alignment=0))
-                
-                cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
-                cell_table.setStyle(TableStyle([
-                    ('ALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), 0),
-                ]))
-                row.append(cell_table)
-            else:
-                row.append(Paragraph("", header_cell_style))
-        table_data.append(row)
+        title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
+        subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#33691e'))
+        note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_name, textColor=colors.HexColor('#b71c1c'))
+        header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_name, textColor=colors.HexColor('#1b5e20'))
         
-    col_width = 560 / 3
-    col_widths = [col_width, col_width, col_width]
-    
-    t = Table(table_data, colWidths=col_widths)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-        ('TOPPADDING', (0,0), (-1,-1), 3),
-        ('LEFTPADDING', (0,0), (-1,-1), 4),
-        ('RIGHTPADDING', (0,0), (-1,-1), 4),
-    ]))
-    
-    story.append(t)
-    doc.build(story, canvasmaker=NumberedCanvas)
-    return send_file(pdf_filename, as_attachment=True)
+        story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
+        story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
+        
+        if user_note:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
+            
+        story.append(Spacer(1, 10))
+        
+        categories = ["فێقی", "مەعمەل", "مەغزەن"]
+        table_headers = [Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style) for cat in categories]
+        max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
+        table_data = [table_headers]
+        
+        for i in range(max_rows):
+            row = []
+            for cat in categories:
+                items_in_cat = items_dict.get(cat, [])
+                if i < len(items_in_cat):
+                    item_name, unit = items_in_cat[i]
+                    name_para = Paragraph(f"<b>{reshape_text(item_name)}</b>", ParagraphStyle('NP', fontName=font_name, fontSize=9, alignment=2))
+                    unit_para = Paragraph(f"<font color='#555'>({reshape_text(unit)}) ✓</font>", ParagraphStyle('UP', fontName=font_name, fontSize=8, alignment=0))
+                    
+                    cell_table = Table([[name_para, unit_para]], colWidths=[130, 50])
+                    cell_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'MIDDLE'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
+                    row.append(cell_table)
+                else:
+                    row.append(Paragraph("", header_cell_style))
+            table_data.append(row)
+            
+        col_width = 560 / 3
+        t = Table(table_data, colWidths=[col_width, col_width, col_width])
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0,0), (-1,-1), 3), ('TOPPADDING', (0,0), (-1,-1), 3), ('LEFTPADDING', (0,0), (-1,-1), 4), ('RIGHTPADDING', (0,0), (-1,-1), 4)]))
+        
+        story.append(t)
+        doc.build(story)
+        return send_file(pdf_filename, as_attachment=True)
+    except Exception as e:
+        return f"PDF Error: {str(e)}", 500
 
 if __name__ == "__main__":
     init_db()
