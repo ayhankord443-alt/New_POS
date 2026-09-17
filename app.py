@@ -28,14 +28,17 @@ def init_db():
                   unit TEXT,
                   category TEXT)''')
     
-    # خشتەیەک بۆ پاراستنا بابەتان دا بشێی ل سێتینگ زێدە و کێم بکەی
     c.execute('''CREATE TABLE IF NOT EXISTS items
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   category TEXT,
                   item_name TEXT,
                   unit TEXT)''')
+                  
+    # خشتەیەک بۆ پاراستنا تێبینیان (Notes)
+    c.execute('''CREATE TABLE IF NOT EXISTS notes
+                 (device_id TEXT PRIMARY KEY,
+                  note_text TEXT)''')
     
-    # ئەگەر خشتە ڤالا بيت، بابه‌تێن سەرەتایی تێدا تومار دکەین
     c.execute("SELECT COUNT(*) FROM items")
     if c.fetchone()[0] == 0:
         default_items = [
@@ -216,6 +219,12 @@ HTML_TEMPLATE = """
         .user-panel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
         .nav-link { background-color: #2e7d32; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
         .logout-btn { background-color: #c62828; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 12px; }
+        
+        /* تێبینی (Note Box) */
+        .note-box { background: #f9fbe7; border: 1px solid #cddc39; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: right; }
+        .note-box textarea { width: 100%; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+        .note-save-btn { background: #558b2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 6px; }
+
         .section-title { text-align: right; margin: 25px 5px 10px 5px; color: #2e7d32; font-size: 18px; font-weight: bold; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .item-card { background: #ffffff; border-radius: 8px; padding: 10px 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e0e0e0; }
@@ -242,6 +251,13 @@ HTML_TEMPLATE = """
             <a href="/settings" class="nav-link">⚙️ سێتینگ (زێدەکرن و ژێبرن)</a>
             <a href="/logout" class="logout-btn">چوونەدەروون</a>
         </div>
+    </div>
+
+    <!-- بەشێ تێبینیان -->
+    <div class="note-box">
+        <label for="noteInput" style="font-weight: bold; color: #33691e; font-size: 13px; display: block; margin-bottom: 5px;">📝 تێبینی (ل سەر PDF و لیستێ دێ دیار بیت):</label>
+        <textarea id="noteInput" placeholder="تێبینییا خۆ لێرە بنڤیسە...">{{ current_note }}</textarea>
+        <button type="button" class="note-save-btn" onclick="saveNote()">تومارکرنا تێبینیێ</button>
     </div>
 
     {% for cat, items in all_items.items() %}
@@ -300,6 +316,19 @@ HTML_TEMPLATE = """
             let newVal = currentVal + amount;
             if (newVal < 0.1) newVal = 0.1;
             input.value = newVal;
+        }
+
+        async function saveNote() {
+            let noteText = document.getElementById('noteInput').value;
+            let formData = new FormData();
+            formData.append('note', noteText);
+            try {
+                let response = await fetch('/save_note', { method: 'POST', body: formData });
+                let data = await response.json();
+                if(data.status === 'success') {
+                    alert('تێبینی ب سەرکەفتیانە هاتە تومارکرن!');
+                }
+            } catch(e) { console.error(e); }
         }
 
         async function quickAddAjax(event, form) {
@@ -469,6 +498,14 @@ def get_device_id():
         session['device_id'] = os.urandom(8).hex()
     return session['device_id']
 
+def get_note(device_id):
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("SELECT note_text FROM notes WHERE device_id = ?", (device_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else ""
+
 def get_orders_list(device_id):
     conn = sqlite3.connect("clean_qayma.db")
     c = conn.cursor()
@@ -501,7 +538,21 @@ def index():
     raw_orders = get_orders_list(device_id)
     tuple_orders = [(o["id"], o["item_name"], o["quantity"], o["unit"], o["category"]) for o in raw_orders]
     items_dict = get_all_items_dict()
-    return render_template_string(HTML_TEMPLATE, all_items=items_dict, orders=tuple_orders)
+    current_note = get_note(device_id)
+    return render_template_string(HTML_TEMPLATE, all_items=items_dict, orders=tuple_orders, current_note=current_note)
+
+@app.route('/save_note', methods=['POST'])
+def save_note():
+    if not session.get('authenticated'):
+        return jsonify({"status": "unauthorized"}), 401
+    device_id = get_device_id()
+    note_text = request.form.get('note', '')
+    conn = sqlite3.connect("clean_qayma.db")
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO notes (device_id, note_text) VALUES (?, ?)", (device_id, note_text))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
 
 @app.route('/settings')
 def settings_page():
@@ -574,12 +625,10 @@ def clear_ajax():
 def download_pdf():
     if not session.get('authenticated'):
         return redirect(url_for('login'))
+    
     device_id = get_device_id()
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
-    c.execute("SELECT item_name, quantity, unit, category FROM orders WHERE device_id = ?", (device_id,))
-    rows = c.fetchall()
-    conn.close()
+    items_dict = get_all_items_dict()
+    user_note = get_note(device_id)
     
     font_font_name = 'Helvetica'
     for font_path in [os.path.join(os.getcwd(), 'Amiri', 'Amiri-Regular.ttf'), "C:\\Windows\\Fonts\\arial.ttf"]:
@@ -591,42 +640,64 @@ def download_pdf():
             except: continue
 
     pdf_filename = f"Organic_Juices_Qayma.pdf"
-    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(pdf_filename, pagesize=A4, rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=20, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
-    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
-    cat_style = ParagraphStyle('CS', parent=styles['Heading2'], alignment=1, fontSize=13, fontName=font_font_name, textColor=colors.whitesmoke, backColor=colors.HexColor('#2e7d32'))
-    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=1, fontSize=11, fontName=font_font_name)
+    title_style = ParagraphStyle('T', parent=styles['Heading1'], alignment=1, fontSize=18, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    subtitle_style = ParagraphStyle('ST', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#33691e'))
+    note_style = ParagraphStyle('NS', parent=styles['Normal'], alignment=2, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#b71c1c'))
+    header_cell_style = ParagraphStyle('HCS', parent=styles['Normal'], alignment=1, fontSize=10, fontName=font_font_name, textColor=colors.HexColor('#1b5e20'))
+    cell_style = ParagraphStyle('CC', parent=styles['Normal'], alignment=2, fontSize=9, fontName=font_font_name)
     
     story.append(Paragraph(f"<b>{reshape_text('کۆمپانییا ئورگانیک جویس')}</b>", title_style))
     story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", subtitle_style))
+    
+    if user_note:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(f"<b>{reshape_text('تێبینی: ')}{reshape_text(user_note)}</b>", note_style))
+        
     story.append(Spacer(1, 10))
     
-    categorized_orders = {}
-    for item_name, qty, unit, cat in rows:
-        if cat not in categorized_orders: categorized_orders[cat] = []
-        categorized_orders[cat].append((item_name, qty, unit))
-
-    for cat_name, items in categorized_orders.items():
-        story.append(Paragraph(f"<b>{reshape_text(f'بەش: {cat_name}')}</b>", cat_style))
-        story.append(Spacer(1, 4))
-        table_data = [[Paragraph(f"<b>{reshape_text('بابەت')}</b>", cell_style), Paragraph(f"<b>{reshape_text('بڕ')}</b>", cell_style), Paragraph(f"<b>{reshape_text('یەکە')}</b>", cell_style)]]
-        for item_name, qty, unit in items:
-            table_data.append([Paragraph(reshape_text(item_name), cell_style), Paragraph(str(qty), cell_style), Paragraph(reshape_text(unit), cell_style)])
-        t = Table(table_data, colWidths=[260, 120, 120])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#419245')),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('GRID', (0,0), (-1,-1), 1, colors.HexColor('#e0e0e0')),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#fcfcfc')])
-        ]))
-        story.append(t)
-        story.append(Spacer(1, 15))
+    # دڵنیابوون ژ سێ ستوونان: فێقی، مەعمەل، مەغزەن
+    categories = ["فێقی", "مەعمەل", "مەغزەن"]
     
+    table_headers = []
+    for cat in categories:
+        table_headers.append(Paragraph(f"<b>{reshape_text(cat)}</b>", header_cell_style))
+    
+    max_rows = max([len(items_dict.get(cat, [])) for cat in categories]) if categories else 0
+    
+    table_data = [table_headers]
+    
+    for i in range(max_rows):
+        row = []
+        for cat in categories:
+            items_in_cat = items_dict.get(cat, [])
+            if i < len(items_in_cat):
+                item_name, unit = items_in_cat[i]
+                text_cell = f"{reshape_text(item_name)}  ✓"
+                row.append(Paragraph(text_cell, cell_style))
+            else:
+                row.append(Paragraph("", cell_style))
+        table_data.append(row)
+        
+    col_width = 560 / 3
+    col_widths = [col_width, col_width, col_width]
+    
+    t = Table(table_data, colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
+        ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
+    
+    story.append(t)
     doc.build(story, canvasmaker=NumberedCanvas)
     return send_file(pdf_filename, as_attachment=True)
 
