@@ -339,9 +339,9 @@ body{
     background:white;
     padding:35px 28px;
     border-radius:24px;
-    box-shadow:0 15px 45px rgba(0,0,0,.10);
+    box-shadow:0 18px 50px rgba(20,80,35,.11);
     text-align:center;
-    border:1px solid #e8eee8;
+    border:1px solid #e3ebe4;
 }
 
 .logo{
@@ -386,7 +386,10 @@ button{
     font-size:16px;
     font-weight:bold;
     cursor:pointer;
+    transition:.12s;
 }
+button:hover{background:#1d7732;}
+button:active{transform:scale(.99);}
 
 .error{
     background:#ffebee;
@@ -470,8 +473,9 @@ body{
     margin:0;
     padding:12px;
     font-family:system-ui,-apple-system,sans-serif;
-    background:#f5f8f5;
+    background:linear-gradient(180deg,#f7faf7 0%,#f1f6f2 100%);
     color:#172017;
+    -webkit-font-smoothing:antialiased;
 }
 
 body:before{
@@ -496,7 +500,8 @@ body:before{
     align-items:center;
     justify-content:space-between;
     gap:10px;
-    box-shadow:0 4px 18px rgba(0,0,0,.06);
+    box-shadow:0 8px 28px rgba(20,80,35,.07);
+    border:1px solid #e4ece5;
     border-bottom:3px solid #218838;
 }
 
@@ -548,7 +553,8 @@ body:before{
     background:white;
     padding:12px;
     border-radius:15px;
-    box-shadow:0 3px 15px rgba(0,0,0,.05);
+    box-shadow:0 6px 22px rgba(20,80,35,.05);
+    border:1px solid #e6ede7;
 }
 
 .search-box input{
@@ -564,8 +570,9 @@ body:before{
 .note{
     max-width:1200px;
     margin:14px auto;
-    background:#fffde7;
+    background:linear-gradient(180deg,#fffef0,#fffde7);
     border:1px solid #dce775;
+    box-shadow:0 5px 18px rgba(100,110,20,.05);
     padding:13px;
     border-radius:15px;
 }
@@ -605,10 +612,11 @@ body:before{
     font-size:18px;
     font-weight:900;
     border-right:5px solid #2e7d32;
-    padding:7px 10px;
-    background:white;
-    border-radius:8px;
-    margin-bottom:10px;
+    padding:9px 12px;
+    background:rgba(255,255,255,.96);
+    border-radius:10px;
+    margin-bottom:11px;
+    box-shadow:0 3px 12px rgba(20,80,35,.04);
 }
 
 /* ITEMS */
@@ -622,16 +630,17 @@ body:before{
 
 .item{
     background:white;
-    border:1px solid #e2e8e2;
+    border:1px solid #e0e9e1;
     border-radius:14px;
     padding:11px;
-    box-shadow:0 3px 10px rgba(0,0,0,.04);
-    transition:.15s;
+    box-shadow:0 4px 13px rgba(20,80,35,.045);
+    transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;
 }
 
 .item:hover{
     transform:translateY(-2px);
-    box-shadow:0 6px 18px rgba(0,0,0,.08);
+    box-shadow:0 9px 24px rgba(20,80,35,.10);
+    border-color:#cfe0d2;
 }
 
 .item-name{
@@ -663,8 +672,10 @@ body:before{
     width:29px;
     border:0;
     border-radius:7px;
-    background:#eeeeee;
-    font-weight:bold;
+    background:#f0f3f0;
+    font-weight:900;
+    cursor:pointer;
+    transition:.12s;
 }
 
 .add{
@@ -673,8 +684,30 @@ body:before{
     border-radius:7px;
     background:#218838;
     color:white;
-    font-weight:bold;
+    font-weight:900;
     cursor:pointer;
+    transition:.12s;
+}
+
+.small-btn:hover{background:#e2e8e2;}
+.small-btn:active,.add:active,.pdf:active,.clear:active,.note button:active{transform:scale(.98);}
+.add:hover{background:#1d7732;}
+.pdf:hover{background:#125d25;}
+.clear:hover{background:#a91f1f;}
+.action{transition:.12s;}
+.action:hover{filter:brightness(.96);transform:translateY(-1px);}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#5a9b62;box-shadow:0 0 0 3px rgba(46,125,50,.10);}
+button:disabled{opacity:.72;cursor:wait;}
+
+.hidden-search-message{
+    display:none;
+    text-align:center;
+    padding:18px;
+    color:#6b756c;
+    background:white;
+    border:1px dashed #cfdacf;
+    border-radius:12px;
+    margin-top:10px;
 }
 
 /* SUMMARY */
@@ -686,7 +719,7 @@ body:before{
     border:2px solid #218838;
     border-radius:18px;
     padding:15px;
-    box-shadow:0 7px 25px rgba(0,0,0,.08);
+    box-shadow:0 10px 30px rgba(20,80,35,.08);
 }
 
 .summary-header{
@@ -730,7 +763,11 @@ th,td{
 th{
     background:#f1f8f2;
     color:#176b2c;
+    font-weight:900;
 }
+
+tbody tr:hover{background:#fafdfb;}
+
 
 .delete-order{
     border:0;
@@ -774,7 +811,10 @@ th{
 
     .header{
         padding:10px;
+        align-items:center;
     }
+
+    .actions{flex-shrink:0;}
 
     .brand h1{
         font-size:15px;
@@ -797,8 +837,10 @@ th{
     }
 
     .item{
-        padding:8px;
+        padding:9px;
     }
+
+    .controls{align-items:center;}
 
     .item-name{
         font-size:12px;
@@ -1048,6 +1090,10 @@ onclick="clearOrders()">
 
 </div>
 
+<div style="max-width:1200px;margin:0 auto 18px;text-align:center;color:#8a938b;font-size:11px;">
+    Organic Juices • سیستەمی قایمە
+</div>
+
 
 <script>
 
@@ -1074,8 +1120,13 @@ async function addItem(button){
     const controls =
         button.parentElement;
 
-    const quantity =
-        controls.querySelector(".qty").value;
+    const qtyInput = controls.querySelector(".qty");
+    let quantity = parseFloat(qtyInput.value);
+
+    if(!Number.isFinite(quantity) || quantity <= 0){
+        quantity = 1;
+        qtyInput.value = 1;
+    }
 
     const form =
         new FormData();
@@ -1216,8 +1267,11 @@ async function deleteOrder(id){
     const data =
         await response.json();
 
-    if(data.status === "success")
+    if(data.status === "success"){
         updateOrders(data.orders);
+    }else{
+        alert(data.message || "هەڵەیەک ڕوویدا");
+    }
 
 }
 
@@ -1235,8 +1289,11 @@ async function clearOrders(){
     const data =
         await response.json();
 
-    if(data.status === "success")
+    if(data.status === "success"){
         updateOrders([]);
+    }else{
+        alert(data.message || "هەڵەیەک ڕوویدا");
+    }
 
 }
 
@@ -1265,8 +1322,12 @@ async function saveNote(){
     const data =
         await response.json();
 
-    if(data.status === "success")
-        alert("✓ تێبینی بە سەرکەوتوویی هەڵگیرا");
+    if(data.status === "success"){
+        const button = document.querySelector(".note button");
+        const oldText = button.innerText;
+        button.innerText = "✓ پاشەکەوتکرا";
+        setTimeout(() => button.innerText = oldText, 1200);
+    }
 
 }
 
@@ -1368,8 +1429,9 @@ content="width=device-width,initial-scale=1">
 body{
     margin:0;
     padding:15px;
-    background:#f5f8f5;
+    background:linear-gradient(180deg,#f7faf7 0%,#f1f6f2 100%);
     font-family:system-ui;
+    -webkit-font-smoothing:antialiased;
 }
 
 .container{
@@ -1383,7 +1445,8 @@ body{
     border-radius:16px;
     padding:18px;
     margin-bottom:15px;
-    box-shadow:0 4px 18px rgba(0,0,0,.05);
+    box-shadow:0 7px 24px rgba(20,80,35,.06);
+    border:1px solid #e4ece5;
 }
 
 .header{
@@ -1633,7 +1696,7 @@ content="width=device-width,initial-scale=1">
 body{
     margin:0;
     padding:20px;
-    background:#f5f8f5;
+    background:linear-gradient(180deg,#f7faf7 0%,#f1f6f2 100%);
     font-family:system-ui;
 }
 
