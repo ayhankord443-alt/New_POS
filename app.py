@@ -1,87 +1,116 @@
 import os
 import sqlite3
+import secrets
 from datetime import datetime
-
 from flask import (
-    Flask,
-    render_template_string,
-    request,
-    send_file,
-    redirect,
-    url_for,
-    send_from_directory,
-    jsonify,
-    session
+    Flask, render_template_string, request, send_file,
+    redirect, url_for, jsonify, session
 )
 
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    KeepTogether
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
-import arabic_reshaper
-from bidi.algorithm import get_display
-
+# =========================================================
+# ORGANIC JUICES - PROFESSIONAL QAYMA SYSTEM
+# =========================================================
 
 app = Flask(__name__)
-app.secret_key = 'organic_juices_secret_key_2026'
 
-SHARED_PASSWORD = "organic123"
+# لە production ـدا ئەمە لە ENV دابنێ
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "organic_juices_secret_key_2026"
+)
+
+DB_NAME = "clean_qayma.db"
+SHARED_PASSWORD = os.environ.get("ORGANIC_PASSWORD", "organic123")
 
 
 # =========================================================
 # DATABASE
 # =========================================================
 
+def get_db():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def init_db():
-    conn = sqlite3.connect("clean_qayma.db")
+    conn = get_db()
     c = conn.cursor()
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS orders
-        (
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id TEXT,
-            item_name TEXT,
-            quantity REAL,
-            unit TEXT,
-            category TEXT
+            device_id TEXT NOT NULL,
+            item_name TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            unit TEXT NOT NULL,
+            category TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
+    """)
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS items
-        (
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT,
-            item_name TEXT,
-            unit TEXT
+            category TEXT NOT NULL,
+            item_name TEXT NOT NULL,
+            unit TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
+    """)
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS notes
-        (
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
             device_id TEXT PRIMARY KEY,
-            note_text TEXT
+            note_text TEXT DEFAULT ''
         )
-    ''')
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS company_info (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            location TEXT NOT NULL DEFAULT 'پارکا شەهیدا',
+            phone TEXT NOT NULL DEFAULT '07500113334'
+        )
+    """)
+
+    c.execute("""
+        INSERT OR IGNORE INTO company_info (id, location, phone)
+        VALUES (1, 'پارکا شەهیدا', '07500113334')
+    """)
+
+    # -----------------------------------------------------
+    # Categories
+    # -----------------------------------------------------
+
+    categories = ["فێقی", "مەعمەل", "مەغزەن"]
+
+    for cat in categories:
+        c.execute(
+            "INSERT OR IGNORE INTO categories (name) VALUES (?)",
+            (cat,)
+        )
+
+    # -----------------------------------------------------
+    # Default Items
+    # -----------------------------------------------------
 
     c.execute("SELECT COUNT(*) FROM items")
 
     if c.fetchone()[0] == 0:
 
         default_items = [
+
+            # =========================
+            # فێقی
+            # =========================
 
             ("فێقی", "نافوكادو", "کیلو"),
             ("فێقی", "مانكو", "کیلو"),
@@ -105,6 +134,10 @@ def init_db():
             ("فێقی", "هیزیر", "کیلو"),
             ("فێقی", "هرميك", "کیلو"),
 
+            # =========================
+            # مەعمەل
+            # =========================
+
             ("مەعمەل", "خوخ", "کیلو"),
             ("مەعمەل", "مانكو", "کیلو"),
             ("مەعمەل", "شاتو", "کیلو"),
@@ -122,6 +155,10 @@ def init_db():
             ("مەعمەل", "کرينجوس", "دانە"),
             ("مەعمەل", "باقركه ری بيستی", "دانە"),
             ("مەعمەل", "دزهو کردن", "دانە"),
+
+            # =========================
+            # مەغزەن
+            # =========================
 
             ("مەغزەن", "كلاس+قباغ", "دانە"),
             ("مەغزەن", "بطل مزن+قباغ", "دانە"),
@@ -147,20 +184,16 @@ def init_db():
             ("مەغزەن", "كلاس تيست", "دانە"),
             ("مەغزەن", "جامسی", "دانە"),
             ("مەغزەن", "معتر جو", "دانە"),
-            ("مەغزەن", "خارنا بالندا", "دانە")
+            ("مەغزەن", "خارنا بالندا", "دانە"),
         ]
 
-        c.executemany(
-            """
+        c.executemany("""
             INSERT INTO items
             (category, item_name, unit)
             VALUES (?, ?, ?)
-            """,
-            default_items
-        )
+        """, default_items)
 
-        conn.commit()
-
+    conn.commit()
     conn.close()
 
 
@@ -168,153 +201,212 @@ init_db()
 
 
 # =========================================================
-# ITEMS
+# HELPERS
 # =========================================================
 
-def get_all_items_dict():
+def get_device_id():
 
-    conn = sqlite3.connect("clean_qayma.db")
-    c = conn.cursor()
+    if "device_id" not in session:
+        session["device_id"] = secrets.token_hex(16)
 
-    c.execute(
-        "SELECT category, item_name, unit FROM items"
-    )
+    return session["device_id"]
 
-    rows = c.fetchall()
+
+def logged_in():
+    return session.get("authenticated") is True
+
+
+def get_note(device_id):
+
+    conn = get_db()
+
+    row = conn.execute("""
+        SELECT note_text
+        FROM notes
+        WHERE device_id = ?
+    """, (device_id,)).fetchone()
 
     conn.close()
 
-    items_dict = {}
+    return row["note_text"] if row else ""
 
-    for cat, name, unit in rows:
 
-        if cat not in items_dict:
-            items_dict[cat] = []
+def get_orders(device_id):
 
-        items_dict[cat].append((name, unit))
+    conn = get_db()
 
-    return items_dict
+    rows = conn.execute("""
+        SELECT id, item_name, quantity, unit, category, created_at
+        FROM orders
+        WHERE device_id = ?
+        ORDER BY id ASC
+    """, (device_id,)).fetchall()
+
+    conn.close()
+
+    return [
+        {
+            "id": r["id"],
+            "item_name": r["item_name"],
+            "quantity": r["quantity"],
+            "unit": r["unit"],
+            "category": r["category"],
+            "created_at": r["created_at"]
+        }
+        for r in rows
+    ]
+
+
+def get_items(search=""):
+
+    conn = get_db()
+
+    if search:
+        rows = conn.execute("""
+            SELECT id, category, item_name, unit
+            FROM items
+            WHERE item_name LIKE ?
+               OR category LIKE ?
+            ORDER BY category, id
+        """, (
+            f"%{search}%",
+            f"%{search}%"
+        )).fetchall()
+
+    else:
+        rows = conn.execute("""
+            SELECT id, category, item_name, unit
+            FROM items
+            ORDER BY category, id
+        """).fetchall()
+
+    conn.close()
+
+    result = {}
+
+    for r in rows:
+
+        if r["category"] not in result:
+            result[r["category"]] = []
+
+        result[r["category"]].append({
+            "id": r["id"],
+            "name": r["item_name"],
+            "unit": r["unit"]
+        })
+
+    return result
+
+
+def get_all_items():
+
+    conn = get_db()
+
+    rows = conn.execute("""
+        SELECT id, category, item_name, unit
+        FROM items
+        ORDER BY category, id DESC
+    """).fetchall()
+
+    conn.close()
+
+    return rows
 
 
 # =========================================================
-# KURDISH / ARABIC RTL FIX
-# =========================================================
-
-def reshape_text(text):
-
-    if text is None:
-        return ""
-
-    text = str(text)
-
-    try:
-
-        reshaped_text = arabic_reshaper.reshape(text)
-
-        return get_display(
-            reshaped_text,
-            base_dir="R"
-        )
-
-    except Exception as e:
-
-        print("RTL PDF ERROR:", e)
-
-        return text
-
-
-# =========================================================
-# LOGIN
+# LOGIN PAGE
 # =========================================================
 
 LOGIN_TEMPLATE = """
+
 <!DOCTYPE html>
 <html lang="ku" dir="rtl">
 
 <head>
 
 <meta charset="UTF-8">
-
 <meta name="viewport"
-content="width=device-width,
-initial-scale=1.0,
-maximum-scale=1.0,
-user-scalable=no">
+content="width=device-width,initial-scale=1">
 
-<title>چوونەژوورەوە - ئۆرگانیک جویس</title>
+<title>Organic Juices</title>
 
 <style>
 
-body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background-color: #f7f9f6;
-    margin: 0;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    text-align: center;
-    color: #1a1a1a;
-    box-sizing: border-box;
+*{
+    box-sizing:border-box;
 }
 
-.card {
-    background: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-    width: 100%;
-    max-width: 360px;
-    border: 1px solid #e0e0e0;
+body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:system-ui,-apple-system,sans-serif;
+    background:
+        radial-gradient(circle at top,#e8f5e9,#f8faf8 55%);
 }
 
-h2 {
-    color: #1b5e20;
-    margin-bottom: 10px;
-    font-size: 22px;
+.login-card{
+    width:min(420px,92%);
+    background:white;
+    padding:35px 28px;
+    border-radius:24px;
+    box-shadow:0 15px 45px rgba(0,0,0,.10);
+    text-align:center;
+    border:1px solid #e8eee8;
 }
 
-input {
-    width: 100%;
-    padding: 12px;
-    margin: 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-sizing: border-box;
-    font-size: 15px;
+.logo{
+    width:95px;
+    height:95px;
+    object-fit:contain;
+    margin-bottom:10px;
 }
 
-button {
-    width: 100%;
-    padding: 12px;
-    background: #2e7d32;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 16px;
-    cursor: pointer;
-    font-weight: bold;
-    margin-top: 10px;
+h1{
+    color:#176b2c;
+    margin:5px 0;
 }
 
-button:hover {
-    background: #1b5e20;
+.subtitle{
+    color:#777;
+    font-size:13px;
+    margin-bottom:25px;
 }
 
-.bio-btn {
-    background: #1b5e20;
-    margin-top: 8px;
-    display: none;
-    font-size: 16px;
-    padding: 14px;
+input{
+    width:100%;
+    padding:14px;
+    border:1px solid #d5ddd5;
+    border-radius:12px;
+    font-size:16px;
+    outline:none;
 }
 
-.error {
-    color: #c62828;
-    margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: bold;
+input:focus{
+    border-color:#2e7d32;
+}
+
+button{
+    width:100%;
+    margin-top:15px;
+    padding:14px;
+    border:0;
+    border-radius:12px;
+    background:#218838;
+    color:white;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.error{
+    background:#ffebee;
+    color:#c62828;
+    padding:10px;
+    border-radius:10px;
+    margin-bottom:12px;
 }
 
 </style>
@@ -323,210 +415,53 @@ button:hover {
 
 <body>
 
-<div class="card">
+<div class="login-card">
 
-<h2>ئۆرگانیک جویس</h2>
+<img src="/logo.png"
+class="logo"
+onerror="this.style.display='none'">
 
-<p style="
-color:#555;
-margin-top:0;
-font-size:13px;
-">
-جارا ئێكێ ڕەمزی گشتی بنڤیسە،
-ژ بۆ جارێن داهاتی ب فەیس ئایدی /
-پەنجەمۆر بچۆ ژوورەوە
-</p>
+<h1>ئۆرگانیک جویس</h1>
+
+<div class="subtitle">
+سیستەمی قایمەی کۆمپانیا
+</div>
 
 {% if error %}
 <div class="error">{{ error }}</div>
 {% endif %}
 
-<form method="POST" id="loginForm">
+<form method="POST">
 
 <input
 type="password"
 name="password"
-id="passwordInput"
-placeholder="ڕەمز (Password)"
+placeholder="ڕەمزی چوونەژوورەوە"
 required
->
+autofocus>
 
-<button type="submit">
-چوونەژوورەوە ب ڕەمز
+<button>
+🔐 چوونەژوورەوە
 </button>
 
 </form>
 
-<button
-type="button"
-id="bioBtn"
-class="bio-btn"
-onclick="loginWithBiometric()"
->
-🔒 چوونەژوورەوە ب فەیس ئایدی / پەنجەمۆر
-</button>
-
 </div>
-
-
-<script>
-
-document.addEventListener("DOMContentLoaded", async () => {
-
-    let savedPass =
-        localStorage.getItem("organic_saved_pass");
-
-    let bioRegistered =
-        localStorage.getItem("organic_bio_registered");
-
-    if (savedPass) {
-
-        document.getElementById("bioBtn")
-        .style.display = "block";
-
-        if (bioRegistered === "true") {
-
-            setTimeout(
-                loginWithBiometric,
-                400
-            );
-
-        }
-
-    }
-
-});
-
-
-document.getElementById("loginForm")
-.addEventListener("submit", () => {
-
-    let pass =
-        document.getElementById("passwordInput").value;
-
-    if(pass) {
-
-        localStorage.setItem(
-            "organic_saved_pass",
-            pass
-        );
-
-        localStorage.setItem(
-            "organic_bio_registered",
-            "true"
-        );
-
-    }
-
-});
-
-
-async function loginWithBiometric() {
-
-    let savedPass =
-        localStorage.getItem("organic_saved_pass");
-
-    if (!savedPass) return;
-
-    try {
-
-        if (
-            window.PublicKeyCredential &&
-            PublicKeyCredential
-            .isUserVerifyingPlatformAuthenticatorAvailable
-        ) {
-
-            let available =
-                await PublicKeyCredential
-                .isUserVerifyingPlatformAuthenticatorAvailable();
-
-            if (available) {
-
-                const challenge =
-                    new Uint8Array([
-                        19,21,31,41,51,61,71,81
-                    ]);
-
-                await navigator.credentials.create({
-
-                    publicKey: {
-
-                        rp: {
-                            name: "Organic Juices Cashier"
-                        },
-
-                        user: {
-                            id: new Uint8Array([
-                                1,2,3,4,5
-                            ]),
-                            name: "cashier",
-                            displayName: "Organic Cashier"
-                        },
-
-                        challenge: challenge,
-
-                        pubKeyCredParams: [
-                            {
-                                alg: -7,
-                                type: "public-key"
-                            },
-                            {
-                                alg: -257,
-                                type: "public-key"
-                            }
-                        ],
-
-                        timeout: 60000,
-
-                        authenticatorSelection: {
-                            authenticatorAttachment:
-                                "platform",
-                            userVerification:
-                                "required"
-                        }
-
-                    }
-
-                });
-
-            }
-
-        }
-
-    } catch (e) {}
-
-    let form =
-        document.createElement("form");
-
-    form.method = "POST";
-
-    let input =
-        document.createElement("input");
-
-    input.type = "hidden";
-    input.name = "password";
-    input.value = savedPass;
-
-    form.appendChild(input);
-
-    document.body.appendChild(form);
-
-    form.submit();
-}
-
-</script>
 
 </body>
 </html>
+
 """
 
 
 # =========================================================
-# MAIN HTML
+# MAIN PAGE
 # =========================================================
 
 HTML_TEMPLATE = """
+
 <!DOCTYPE html>
+
 <html lang="ku" dir="rtl">
 
 <head>
@@ -534,296 +469,370 @@ HTML_TEMPLATE = """
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width,
-initial-scale=1.0,
-maximum-scale=1.0,
-user-scalable=no">
+content="width=device-width,initial-scale=1">
 
-<title>کۆمپانییا ئورگانیک جویس</title>
-
-<meta name="apple-mobile-web-app-capable"
-content="yes">
-
-<meta name="apple-mobile-web-app-status-bar-style"
-content="black-translucent">
-
-<meta name="apple-mobile-web-app-title"
-content="ئۆرگانیک جویس">
-
-<link rel="apple-touch-icon"
-href="/logo.png">
+<title>قایمە | Organic Juices</title>
 
 <style>
 
-body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background-color: #ffffff;
-    margin: 0;
-    padding: 15px;
-    text-align: center;
-    color: #1a1a1a;
-    position: relative;
+*{
+    box-sizing:border-box;
 }
 
-body::before {
-    content: "";
-    background-image: url('/logo.png');
-    background-repeat: no-repeat;
-    background-position: center top 130px;
-    background-size: 280px;
-    opacity: 0.08;
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    z-index: -1;
+body{
+    margin:0;
+    padding:12px;
+    font-family:system-ui,-apple-system,sans-serif;
+    background:#f5f8f5;
+    color:#172017;
 }
 
-.brand-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 3px solid #2e7d32;
+body:before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:url('/logo.png') center/280px no-repeat;
+    opacity:.035;
+    pointer-events:none;
+    z-index:-1;
 }
 
-.brand-header h1 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 900;
-    color: #1b5e20;
+/* HEADER */
+
+.header{
+    max-width:1200px;
+    margin:auto;
+    background:white;
+    padding:14px 18px;
+    border-radius:18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    box-shadow:0 4px 18px rgba(0,0,0,.06);
+    border-bottom:3px solid #218838;
 }
 
-.user-panel {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
+.brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
 }
 
-.nav-link {
-    background-color: #2e7d32;
-    color: white;
-    padding: 6px 10px;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 12px;
+.brand img{
+    width:45px;
+    height:45px;
+    object-fit:contain;
 }
 
-.logout-btn {
-    background-color: #c62828;
-    color: white;
-    padding: 6px 10px;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 12px;
+.brand h1{
+    margin:0;
+    color:#176b2c;
+    font-size:19px;
 }
 
-.note-box {
-    background: #f9fbe7;
-    border: 1px solid #cddc39;
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 20px;
-    text-align: right;
+.actions{
+    display:flex;
+    gap:7px;
 }
 
-.note-box textarea {
-    width: 100%;
-    height: 60px;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 13px;
-    box-sizing: border-box;
-    resize: vertical;
+.action{
+    text-decoration:none;
+    padding:9px 12px;
+    border-radius:9px;
+    font-size:12px;
+    font-weight:bold;
+    color:white;
 }
 
-.note-save-btn {
-    background: #558b2f;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 12px;
-    cursor: pointer;
-    margin-top: 6px;
+.settings{
+    background:#2e7d32;
 }
 
-.section-title {
-    text-align: right;
-    margin: 25px 5px 10px 5px;
-    color: #2e7d32;
-    font-size: 18px;
-    font-weight: bold;
-    border-bottom: 2px solid #2e7d32;
-    padding-bottom: 4px;
+.logout{
+    background:#c62828;
 }
 
-.grid {
-    display: grid;
+/* SEARCH */
+
+.search-box{
+    max-width:1200px;
+    margin:14px auto;
+    background:white;
+    padding:12px;
+    border-radius:15px;
+    box-shadow:0 3px 15px rgba(0,0,0,.05);
+}
+
+.search-box input{
+    width:100%;
+    padding:13px;
+    border:1px solid #ddd;
+    border-radius:10px;
+    font-size:14px;
+}
+
+/* NOTE */
+
+.note{
+    max-width:1200px;
+    margin:14px auto;
+    background:#fffde7;
+    border:1px solid #dce775;
+    padding:13px;
+    border-radius:15px;
+}
+
+.note textarea{
+    width:100%;
+    height:65px;
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:10px;
+    resize:vertical;
+}
+
+.note button{
+    margin-top:7px;
+    background:#689f38;
+    color:white;
+    border:0;
+    border-radius:8px;
+    padding:8px 14px;
+    font-weight:bold;
+}
+
+/* CONTENT */
+
+.content{
+    max-width:1200px;
+    margin:auto;
+}
+
+.category{
+    margin-top:22px;
+}
+
+.category-title{
+    color:#176b2c;
+    font-size:18px;
+    font-weight:900;
+    border-right:5px solid #2e7d32;
+    padding:7px 10px;
+    background:white;
+    border-radius:8px;
+    margin-bottom:10px;
+}
+
+/* ITEMS */
+
+.grid{
+    display:grid;
     grid-template-columns:
-        repeat(auto-fill, minmax(130px, 1fr));
-    gap: 10px;
-    margin-bottom: 10px;
+        repeat(auto-fill,minmax(145px,1fr));
+    gap:10px;
 }
 
-.item-card {
-    background: #ffffff;
-    border-radius: 8px;
-    padding: 10px 6px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    border: 1px solid #e0e0e0;
+.item{
+    background:white;
+    border:1px solid #e2e8e2;
+    border-radius:14px;
+    padding:11px;
+    box-shadow:0 3px 10px rgba(0,0,0,.04);
+    transition:.15s;
 }
 
-.item-name {
-    font-weight: bold;
-    font-size: 13px;
-    margin-bottom: 2px;
-    color: #111;
+.item:hover{
+    transform:translateY(-2px);
+    box-shadow:0 6px 18px rgba(0,0,0,.08);
 }
 
-.unit-tag {
-    font-size: 11px;
-    color: #558b2f;
-    font-weight: 600;
-    margin-bottom: 6px;
+.item-name{
+    font-size:14px;
+    font-weight:900;
+    min-height:35px;
 }
 
-.btn-group {
-    display: flex;
-    gap: 3px;
-    align-items: center;
-    justify-content: center;
+.unit{
+    font-size:11px;
+    color:#689f38;
+    margin-bottom:8px;
 }
 
-.qty-btn {
-    background: #e0e0e0;
-    border: none;
-    font-weight: bold;
-    width: 26px;
-    height: 28px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #333;
+.controls{
+    display:flex;
+    gap:4px;
 }
 
-.qty-btn:active {
-    background: #ccc;
+.qty{
+    width:42px;
+    text-align:center;
+    border:1px solid #ccc;
+    border-radius:7px;
+    font-weight:bold;
 }
 
-.qty-input {
-    width: 34px;
-    padding: 4px 1px;
-    text-align: center;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: bold;
+.small-btn{
+    width:29px;
+    border:0;
+    border-radius:7px;
+    background:#eeeeee;
+    font-weight:bold;
 }
 
-.btn-add {
-    background: #2e7d32;
-    color: white;
-    border: none;
-    padding: 6px 4px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 11px;
-    cursor: pointer;
-    flex: 1;
+.add{
+    flex:1;
+    border:0;
+    border-radius:7px;
+    background:#218838;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
 }
 
-.btn-add.added {
-    background: #388e3c;
-    transform: scale(0.96);
+/* SUMMARY */
+
+.summary{
+    max-width:1200px;
+    margin:25px auto;
+    background:white;
+    border:2px solid #218838;
+    border-radius:18px;
+    padding:15px;
+    box-shadow:0 7px 25px rgba(0,0,0,.08);
 }
 
-.order-summary {
-    background: #ffffff;
-    border-radius: 10px;
-    padding: 15px;
-    margin-top: 25px;
-    text-align: right;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    border: 2px solid #2e7d32;
+.summary-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
 }
 
-.action-btns {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 15px;
+.summary h2{
+    color:#176b2c;
+    margin:0;
 }
 
-.pdf-btn {
-    background: #1b5e20;
-    color: white;
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    font-weight: bold;
-    font-size: 15px;
-    cursor: pointer;
+.count{
+    background:#e8f5e9;
+    color:#176b2c;
+    padding:6px 10px;
+    border-radius:20px;
+    font-weight:bold;
+    font-size:12px;
 }
 
-.whatsapp-btn {
-    background: #25D366;
-    color: white;
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    font-weight: bold;
-    font-size: 15px;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    box-sizing: border-box;
+.table-wrap{
+    overflow-x:auto;
 }
 
-.clear-btn {
-    background-color: #c62828;
-    color: white;
-    width: 100%;
-    padding: 9px;
-    border: none;
-    border-radius: 6px;
-    font-weight: bold;
-    margin-top: 6px;
-    cursor: pointer;
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:12px;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
+th,td{
+    padding:10px;
+    border-bottom:1px solid #eee;
+    text-align:right;
+    font-size:13px;
 }
 
-th, td {
-    border-bottom: 1px solid #eee;
-    padding: 8px;
-    text-align: right;
-    font-size: 13px;
+th{
+    background:#f1f8f2;
+    color:#176b2c;
 }
 
-th {
-    background-color: #f5f5f5;
-    color: #2e7d32;
+.delete-order{
+    border:0;
+    background:#ffebee;
+    color:#c62828;
+    border-radius:6px;
+    padding:5px 8px;
+    cursor:pointer;
+}
+
+.pdf{
+    width:100%;
+    padding:13px;
+    margin-top:12px;
+    border:0;
+    border-radius:10px;
+    background:#176b2c;
+    color:white;
+    font-size:15px;
+    font-weight:bold;
+}
+
+.clear{
+    width:100%;
+    padding:11px;
+    margin-top:7px;
+    border:0;
+    border-radius:10px;
+    background:#c62828;
+    color:white;
+    font-weight:bold;
+}
+
+/* MOBILE */
+
+@media(max-width:600px){
+
+    body{
+        padding:7px;
+    }
+
+    .header{
+        padding:10px;
+    }
+
+    .brand h1{
+        font-size:15px;
+    }
+
+    .brand img{
+        width:38px;
+        height:38px;
+    }
+
+    .action{
+        padding:7px;
+        font-size:10px;
+    }
+
+    .grid{
+        grid-template-columns:
+            repeat(2,minmax(0,1fr));
+        gap:7px;
+    }
+
+    .item{
+        padding:8px;
+    }
+
+    .item-name{
+        font-size:12px;
+    }
+
+    .qty{
+        width:34px;
+    }
+
+    .small-btn{
+        width:25px;
+    }
+
+    .add{
+        font-size:10px;
+    }
+
+    th,td{
+        padding:7px 5px;
+        font-size:11px;
+    }
 }
 
 </style>
@@ -832,135 +841,128 @@ th {
 
 <body>
 
-<div class="brand-header">
+<!-- HEADER -->
 
-<h1>
-کۆمپانییا ئورگانیک جویس
-</h1>
+<header class="header">
 
-<div class="user-panel">
+<div class="brand">
 
-<a href="/settings"
-class="nav-link">
-⚙️ سێتینگ (زێدەکرن و ژێبرن)
+<img src="/logo.png"
+onerror="this.style.display='none'">
+
+<h1>کۆمپانییا ئۆرگانیک جویس</h1>
+
+</div>
+
+<div class="actions">
+
+<a class="action settings"
+href="/settings">
+⚙️ سێتینگ
 </a>
 
-<a href="/logout"
-class="logout-btn">
-چوونەدەروون
+<a class="action logout"
+href="/logout">
+خروج
 </a>
 
 </div>
 
+</header>
+
+
+<!-- SEARCH -->
+
+<div class="search-box">
+
+<input
+id="search"
+type="search"
+placeholder="🔎 گەڕان بۆ بابەت..."
+value="{{ search }}"
+oninput="searchItems()">
+
 </div>
 
 
-<div class="note-box">
+<!-- NOTE -->
 
-<label
-for="noteInput"
-style="
-font-weight:bold;
-color:#33691e;
-font-size:13px;
-display:block;
-margin-bottom:5px;
-">
-📝 تێبینی
-(ل سەر PDF و لیستێ دێ دیار بیت):
-</label>
+<div class="note">
+
+<strong>📝 تێبینی قایمە</strong>
 
 <textarea
 id="noteInput"
-placeholder="تێبینییا خۆ لێرە بنڤیسە..."
+placeholder="تێبینی خۆت لێرە بنووسە..."
 >{{ current_note }}</textarea>
 
-<button
-type="button"
-class="note-save-btn"
-onclick="saveNote()">
-تومارکرنا تێبینیێ
+<button onclick="saveNote()">
+💾 تومارکردنی تێبینی
 </button>
 
 </div>
 
 
-{% for cat, items in all_items.items() %}
+<div class="content">
 
-<div class="section-title">
-🔸 {{ cat }}
+{% for category, items in all_items.items() %}
+
+<section
+class="category"
+data-category="{{ category }}">
+
+<div class="category-title">
+🔸 {{ category }}
 </div>
 
 <div class="grid">
 
-{% for item_name, unit in items %}
+{% for item in items %}
 
-<div class="item-card">
-
-<div>
+<div
+class="item"
+data-name="{{ item.name|lower }}">
 
 <div class="item-name">
-{{ item_name }}
+{{ item.name }}
 </div>
 
-<div class="unit-tag">
-({{ unit }})
+<div class="unit">
+یەکە: {{ item.unit }}
 </div>
 
-</div>
-
-
-<form
-onsubmit="quickAddAjax(event, this)"
-class="btn-group">
-
-<input
-type="hidden"
-name="item_name"
-value="{{ item_name }}"
->
-
-<input
-type="hidden"
-name="unit"
-value="{{ unit }}"
->
-
-<input
-type="hidden"
-name="category"
-value="{{ cat }}"
->
+<div class="controls">
 
 <button
-type="button"
-class="qty-btn"
-onclick="adjustQty(this, -1)">
--
+class="small-btn"
+onclick="changeQty(this,-1)">
+−
 </button>
 
 <input
+class="qty"
 type="number"
-name="quantity"
 value="1"
-step="any"
-class="qty-input"
->
+min="0.1"
+step="0.1">
 
 <button
-type="button"
-class="qty-btn"
-onclick="adjustQty(this, 1)">
+class="small-btn"
+onclick="changeQty(this,1)">
 +
 </button>
 
 <button
-type="submit"
-class="btn-add">
-زێدەکه
+class="add"
+data-id="{{ item.id }}"
+data-name="{{ item.name }}"
+data-unit="{{ item.unit }}"
+data-category="{{ category }}"
+onclick="addItem(this)">
+زێدە
 </button>
 
-</form>
+</div>
 
 </div>
 
@@ -968,60 +970,67 @@ class="btn-add">
 
 </div>
 
+</section>
+
 {% endfor %}
 
+</div>
+
+
+<!-- SUMMARY -->
 
 <div
-class="order-summary"
-id="orderSummaryContainer"
-style="
-display:
-{% if orders %}
-block
-{% else %}
-none
-{% endif %};
-">
+class="summary"
+id="summary"
+style="{% if orders %}{% else %}display:none{% endif %}">
 
-<h3
-style="
-margin:0 0 10px 0;
-color:#1b5e20;
-">
-📋 لیستا داواکری (قایمە):
-</h3>
+<div class="summary-header">
 
+<h2>📋 قایمە</h2>
 
-<table id="ordersTable">
+<span class="count"
+id="orderCount">
+{{ orders|length }} بابەت
+</span>
+
+</div>
+
+<div class="table-wrap">
+
+<table>
 
 <thead>
 
 <tr>
-
+<th>بەش</th>
 <th>بابەت</th>
 <th>بڕ</th>
 <th>یەکە</th>
-
+<th>کردار</th>
 </tr>
 
 </thead>
 
-<tbody id="ordersTableBody">
+<tbody id="ordersBody">
 
-{% for item in orders %}
+{% for order in orders %}
 
 <tr>
 
-<td>
-<b>{{ item[1] }}</b>
-</td>
+<td>{{ order.category }}</td>
+
+<td><b>{{ order.item_name }}</b></td>
+
+<td>{{ order.quantity }}</td>
+
+<td>{{ order.unit }}</td>
 
 <td>
-{{ item[2] }}
-</td>
-
-<td>
-{{ item[3] }}
+<button
+class="delete-order"
+onclick="deleteOrder({{ order.id }})">
+🗑️
+</button>
 </td>
 
 </tr>
@@ -1032,33 +1041,22 @@ color:#1b5e20;
 
 </table>
 
-
-<div class="action-btns">
-
-<button
-type="button"
-class="pdf-btn"
-onclick="shareInvoicePDF()">
-📄 شێرکرن و داگرتنا فایلا PDF
-(فەرمی و ئاسویی)
-</button>
-
-<a
-href="#"
-id="whatsappShareBtn"
-class="whatsapp-btn"
-onclick="shareViaWhatsApp(event)">
-💬 شێرکرن بۆ واتسئەپ (PDF / فەرمی)
-</a>
-
 </div>
 
+<button
+class="pdf"
+onclick="downloadPDF()">
+
+📄 دروستکردنی PDF
+
+</button>
 
 <button
-type="button"
-class="clear-btn"
-onclick="clearOrdersAjax()">
-🗑️ پاککرنا قایمەی
+class="clear"
+onclick="clearOrders()">
+
+🗑️ پاککردنی هەموو قایمە
+
 </button>
 
 </div>
@@ -1066,326 +1064,302 @@ onclick="clearOrdersAjax()">
 
 <script>
 
-function adjustQty(btn, amount) {
+function changeQty(button, amount){
 
-    let input =
-        btn.parentElement
-        .querySelector('.qty-input');
+    const input =
+        button.parentElement.querySelector(".qty");
 
-    let currentVal =
+    let value =
         parseFloat(input.value) || 1;
 
-    let newVal =
-        currentVal + amount;
+    value += amount;
 
-    if (newVal < 0.1)
-        newVal = 0.1;
+    if(value < 0.1)
+        value = 0.1;
 
-    input.value = newVal;
+    input.value =
+        Number(value.toFixed(2));
 }
 
 
-async function saveNote() {
+async function addItem(button){
 
-    let noteText =
-        document
-        .getElementById('noteInput')
-        .value;
+    const controls =
+        button.parentElement;
 
-    let formData =
+    const quantity =
+        controls.querySelector(".qty").value;
+
+    const form =
         new FormData();
 
-    formData.append(
-        'note',
-        noteText
+    form.append(
+        "item_name",
+        button.dataset.name
     );
 
-    try {
+    form.append(
+        "unit",
+        button.dataset.unit
+    );
 
-        let response =
+    form.append(
+        "category",
+        button.dataset.category
+    );
+
+    form.append(
+        "quantity",
+        quantity
+    );
+
+    button.disabled = true;
+    button.innerText = "✓";
+
+    try{
+
+        const response =
             await fetch(
-                '/save_note',
+                "/quick_add_ajax",
                 {
-                    method: 'POST',
-                    body: formData
+                    method:"POST",
+                    body:form
                 }
             );
 
-        let data =
+        const data =
             await response.json();
 
-        if(data.status === 'success') {
+        if(data.status === "success"){
 
-            alert(
-                'تێبینی ب سەرکەفتیانە هاتە تومارکرن!'
-            );
+            updateOrders(data.orders);
+
+            controls.querySelector(".qty").value = 1;
+
+        }else{
+
+            alert(data.message || "هەڵەیەک ڕوویدا");
 
         }
 
-    } catch(e) {
+    }catch(error){
 
-        console.error(e);
+        alert("پەیوەندی بە سێرڤەرەوە نەکرا");
 
     }
+
+    setTimeout(()=>{
+        button.disabled=false;
+        button.innerText="زێدە";
+    },400);
+
 }
 
 
-async function quickAddAjax(event, form) {
+function updateOrders(orders){
 
-    event.preventDefault();
+    const summary =
+        document.getElementById("summary");
 
-    let formData =
-        new FormData(form);
+    const body =
+        document.getElementById("ordersBody");
 
-    let btn =
-        form.querySelector('.btn-add');
+    const count =
+        document.getElementById("orderCount");
 
-    try {
+    if(!orders.length){
 
-        let response =
-            await fetch(
-                '/quick_add_ajax',
-                {
-                    method: 'POST',
-                    body: formData
-                }
-            );
-
-        let data =
-            await response.json();
-
-        if (data.status === 'success') {
-
-            updateOrdersTable(
-                data.orders
-            );
-
-            btn.classList.add('added');
-
-            setTimeout(
-                () =>
-                btn.classList.remove('added'),
-                300
-            );
-
-        }
-
-    } catch (err) {
-
-        console.error(err);
-
-    }
-}
-
-
-async function clearOrdersAjax() {
-
-    try {
-
-        let response =
-            await fetch('/clear_ajax');
-
-        let data =
-            await response.json();
-
-        if (data.status === 'success') {
-
-            updateOrdersTable([]);
-
-        }
-
-    } catch (err) {
-
-        console.error(err);
-
-    }
-}
-
-
-function updateOrdersTable(orders) {
-
-    let container =
-        document.getElementById(
-            'orderSummaryContainer'
-        );
-
-    let tbody =
-        document.getElementById(
-            'ordersTableBody'
-        );
-
-    if (orders.length === 0) {
-
-        container.style.display = 'none';
-
-        tbody.innerHTML = '';
+        summary.style.display="none";
+        body.innerHTML="";
+        count.innerText="0 بابەت";
 
         return;
     }
 
-    container.style.display = 'block';
+    summary.style.display="block";
 
-    tbody.innerHTML =
-        orders.map(item => `
+    count.innerText =
+        orders.length + " بابەت";
+
+    body.innerHTML =
+        orders.map(o => `
 
         <tr>
 
-            <td>
-                <b>${item.item_name}</b>
-            </td>
+        <td>${escapeHTML(o.category)}</td>
 
-            <td>
-                ${item.quantity}
-            </td>
+        <td><b>${escapeHTML(o.item_name)}</b></td>
 
-            <td>
-                ${item.unit}
-            </td>
+        <td>${o.quantity}</td>
+
+        <td>${escapeHTML(o.unit)}</td>
+
+        <td>
+
+        <button
+        class="delete-order"
+        onclick="deleteOrder(${o.id})">
+
+        🗑️
+
+        </button>
+
+        </td>
 
         </tr>
 
-        `).join('');
+        `).join("");
+
 }
 
 
-async function shareInvoicePDF() {
+async function deleteOrder(id){
 
-    try {
+    if(!confirm("ئەم بابەتە لە قایمە بسڕینەوە؟"))
+        return;
 
-        let response =
-            await fetch('/download_pdf');
+    const response =
+        await fetch(
+            "/delete_order/" + id,
+            {
+                method:"POST"
+            }
+        );
 
-        let blob =
-            await response.blob();
+    const data =
+        await response.json();
 
-        let file =
-            new File(
-                [blob],
-                "Organic_Juices_Qayma.pdf",
-                {
-                    type: "application/pdf"
-                }
-            );
+    if(data.status === "success")
+        updateOrders(data.orders);
 
-        if (
-            navigator.canShare &&
-            navigator.canShare({
-                files: [file]
-            })
-        ) {
-
-            await navigator.share({
-
-                title:
-                    'پسولتا فرۆتنێ',
-
-                text:
-                    'فەرموو پسولتا تە یا ئۆرگانیک جویس ب شێوەیەکێ فەرمی',
-
-                files: [file]
-
-            });
-
-        } else {
-
-            let url =
-                URL.createObjectURL(blob);
-
-            let a =
-                document.createElement('a');
-
-            a.href = url;
-
-            a.download =
-                'Organic_Juices_Qayma.pdf';
-
-            a.click();
-
-        }
-
-    } catch (error) {
-
-        window.location.href =
-            '/download_pdf';
-
-    }
 }
 
 
-async function shareViaWhatsApp(event) {
+async function clearOrders(){
 
-    event.preventDefault();
+    if(!confirm(
+        "دڵنیایت دەتەوێت هەموو قایمە پاک بکەیتەوە؟"
+    ))
+        return;
 
-    try {
+    const response =
+        await fetch("/clear_ajax");
 
-        let response =
-            await fetch('/download_pdf');
+    const data =
+        await response.json();
 
-        let blob =
-            await response.blob();
+    if(data.status === "success")
+        updateOrders([]);
 
-        let file =
-            new File(
-                [blob],
-                "Organic_Juices_Qayma.pdf",
-                {
-                    type: "application/pdf"
-                }
-            );
+}
 
-        if (
-            navigator.canShare &&
-            navigator.canShare({
-                files: [file]
-            })
-        ) {
 
-            await navigator.share({
+async function saveNote(){
 
-                title:
-                    'قایما کۆمپانییا ئۆرگانیک جویس',
+    const note =
+        document.getElementById(
+            "noteInput"
+        ).value;
 
-                text:
-                    'فەرموو قایما فەرمییا کۆمپانییا ئورگانیک جویس.',
+    const form =
+        new FormData();
 
-                files: [file]
+    form.append("note",note);
 
-            });
+    const response =
+        await fetch(
+            "/save_note",
+            {
+                method:"POST",
+                body:form
+            }
+        );
 
-        } else {
+    const data =
+        await response.json();
 
-            let url =
-                URL.createObjectURL(blob);
+    if(data.status === "success")
+        alert("✓ تێبینی بە سەرکەوتوویی هەڵگیرا");
 
-            let a =
-                document.createElement('a');
+}
 
-            a.href = url;
 
-            a.download =
-                'Organic_Juices_Qayma.pdf';
+function searchItems(){
 
-            a.click();
+    const value =
+        document
+        .getElementById("search")
+        .value
+        .toLowerCase()
+        .trim();
 
-            alert(
-                'فایلا PDF هاتە داگرتن. نها دشێی ل واتسئەپی وەک فایلە کا فەرمی بێرەکی.'
-            );
+    document
+    .querySelectorAll(".category")
+    .forEach(category => {
 
-        }
+        let visible = 0;
 
-    } catch (e) {
+        category
+        .querySelectorAll(".item")
+        .forEach(item => {
 
-        window.location.href =
-            '/download_pdf';
+            const name =
+                item.dataset.name;
 
-    }
+            const show =
+                !value ||
+                name.includes(value);
+
+            item.style.display =
+                show ? "" : "none";
+
+            if(show)
+                visible++;
+
+        });
+
+        category.style.display =
+            visible ? "" : "none";
+
+    });
+
+}
+
+
+function downloadPDF(){
+
+    window.location.href =
+        "/download_pdf";
+
+}
+
+
+function escapeHTML(value){
+
+    return String(value)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+
 }
 
 </script>
 
 </body>
 </html>
+
 """
+
+
+def get_company_info():
+    conn = get_db()
+    row = conn.execute("SELECT location, phone FROM company_info WHERE id = 1").fetchone()
+    conn.close()
+    if row:
+        return row["location"], row["phone"]
+    return "پارکا شەهیدا", "07500113334"
 
 
 # =========================================================
@@ -1393,7 +1367,9 @@ async function shareViaWhatsApp(event) {
 # =========================================================
 
 SETTINGS_TEMPLATE = """
+
 <!DOCTYPE html>
+
 <html lang="ku" dir="rtl">
 
 <head>
@@ -1401,112 +1377,116 @@ SETTINGS_TEMPLATE = """
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width,
-initial-scale=1.0,
-maximum-scale=1.0,
-user-scalable=no">
+content="width=device-width,initial-scale=1">
 
-<title>ڕێڤەبرنا بابەتان - سێتینگ</title>
+<title>سێتینگ | Organic Juices</title>
 
 <style>
 
-body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background-color: #f7f9f6;
-    margin: 0;
-    padding: 15px;
-    color: #1a1a1a;
-    direction: rtl;
-    text-align: right;
+*{
+    box-sizing:border-box;
 }
 
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    margin-bottom: 20px;
+body{
+    margin:0;
+    padding:15px;
+    background:#f5f8f5;
+    font-family:system-ui;
 }
 
-.back-btn {
-    background: #2e7d32;
-    color: white;
-    padding: 8px 15px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 13px;
+.container{
+    max-width:1100px;
+    margin:auto;
 }
 
-.card {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    margin-bottom: 20px;
+.header,
+.card{
+    background:white;
+    border-radius:16px;
+    padding:18px;
+    margin-bottom:15px;
+    box-shadow:0 4px 18px rgba(0,0,0,.05);
 }
 
-h2, h3 {
-    color: #1b5e20;
-    margin-top: 0;
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
 }
 
-input, select {
-    width: 100%;
-    padding: 10px;
-    margin: 8px 0 15px 0;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-sizing: border-box;
-    font-size: 14px;
+h2,h3{
+    color:#176b2c;
 }
 
-button {
-    background: #2e7d32;
-    color: white;
-    border: none;
-    padding: 10px 15px;
-    border-radius: 6px;
-    font-weight: bold;
-    cursor: pointer;
-    font-size: 14px;
-    width: 100%;
+input,select{
+    width:100%;
+    padding:12px;
+    margin:6px 0 12px;
+    border:1px solid #ccc;
+    border-radius:9px;
 }
 
-button:hover {
-    background: #1b5e20;
+button{
+    width:100%;
+    padding:11px;
+    border:0;
+    border-radius:9px;
+    background:#218838;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
+.back{
+    text-decoration:none;
+    background:#218838;
+    color:white;
+    padding:9px 13px;
+    border-radius:9px;
 }
 
-th, td {
-    border-bottom: 1px solid #eee;
-    padding: 10px;
-    font-size: 13px;
-    text-align: right;
+.table-wrap{
+    overflow:auto;
 }
 
-th {
-    background-color: #f5f5f5;
-    color: #2e7d32;
+table{
+    width:100%;
+    border-collapse:collapse;
 }
 
-.del-btn {
-    background-color: #c62828;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 12px;
-    display: inline-block;
+th,td{
+    padding:10px;
+    border-bottom:1px solid #eee;
+    text-align:right;
+    white-space:nowrap;
+}
+
+th{
+    color:#176b2c;
+    background:#f1f8f2;
+}
+
+.actions{
+    display:flex;
+    gap:5px;
+}
+
+.edit{
+    background:#1565c0;
+    color:white;
+    padding:6px 9px;
+    border-radius:6px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+.delete{
+    background:#c62828;
+    color:white;
+    padding:6px 9px;
+    border-radius:6px;
+    text-decoration:none;
+    font-size:12px;
 }
 
 </style>
@@ -1515,17 +1495,14 @@ th {
 
 <body>
 
+<div class="container">
+
 <div class="header">
 
-<h2 style="margin:0;">
-⚙️ سێتینگ:
-زێدەکرن و ژێبرنا بابەتان
-</h2>
+<h2>⚙️ سێتینگی سیستەم</h2>
 
-<a
-href="/"
-class="back-btn">
-⬅️ ڤەڕەقین بۆ کاشێرێ
+<a class="back" href="/">
+⬅️ گەڕانەوە
 </a>
 
 </div>
@@ -1533,65 +1510,41 @@ class="back-btn">
 
 <div class="card">
 
-<h3>
-➕ زێدەکرنا بابەتەکێ نوو
-</h3>
+<h3>➕ زیادکردنی بابەتی نوێ</h3>
 
-<form
-method="POST"
+<form method="POST"
 action="/add_item_setting">
 
-<label>
-بەش (Category):
-</label>
+<label>بەش</label>
 
-<select
-name="category"
-required>
+<select name="category">
 
-<option value="فێقی">
-فێقی
+{% for cat in categories %}
+
+<option value="{{ cat }}">
+{{ cat }}
 </option>
 
-<option value="مەعمەل">
-مەعمەل
-</option>
-
-<option value="مەغزەن">
-مەغزەن
-</option>
+{% endfor %}
 
 </select>
 
-
-<label>
-ناڤێ بابەتی
-(نموونە: ڕەز):
-</label>
+<label>ناوی بابەت</label>
 
 <input
-type="text"
 name="item_name"
-placeholder="ناڤێ بابەتی بنڤیسە"
-required
->
+placeholder="ناوی بابەت"
+required>
 
-
-<label>
-یەکە
-(Unit - نموونە: کیلو، دانە):
-</label>
+<label>یەکە</label>
 
 <input
-type="text"
 name="unit"
-placeholder="یەکە بنڤیسە"
-required
->
+placeholder="کیلو / دانە / کارتۆن..."
+required>
 
-
-<button type="submit">
-تومارکرن و زێدەکرن
+<button>
+💾 تومارکردن
 </button>
 
 </form>
@@ -1602,9 +1555,10 @@ required
 <div class="card">
 
 <h3>
-📋 لیستەیا هەمی بابەتێن هەی
-(بۆ ژێبرنێ)
+📋 لیستی هەموو بابەتەکان
 </h3>
+
+<div class="table-wrap">
 
 <table>
 
@@ -1612,8 +1566,9 @@ required
 
 <tr>
 
+<th>#</th>
 <th>بەش</th>
-<th>ناڤێ بابەتی</th>
+<th>ناو</th>
 <th>یەکە</th>
 <th>کردار</th>
 
@@ -1623,34 +1578,36 @@ required
 
 <tbody>
 
-{% for item in all_items_list %}
+{% for item in items %}
 
 <tr>
 
-<td>
-{{ item[1] }}
-</td>
+<td>{{ item.id }}</td>
+
+<td>{{ item.category }}</td>
+
+<td><b>{{ item.item_name }}</b></td>
+
+<td>{{ item.unit }}</td>
 
 <td>
-<b>{{ item[2] }}</b>
-</td>
 
-<td>
-{{ item[3] }}
-</td>
-
-<td>
+<div class="actions">
 
 <a
-href="/delete_item_setting/{{ item[0] }}"
-class="del-btn"
-onclick="
-return confirm(
-'تە مسۆگەر دڤێت ڤی بابەتی ژێببی؟'
-)
-">
-ژێبرن 🗑️
+class="edit"
+href="/edit_item/{{ item.id }}">
+✏️ Edit
 </a>
+
+<a
+class="delete"
+href="/delete_item_setting/{{ item.id }}"
+onclick="return confirm('دڵنیایت؟')">
+🗑️ Delete
+</a>
+
+</div>
 
 </td>
 
@@ -1664,347 +1621,452 @@ return confirm(
 
 </div>
 
+</div>
+
+</div>
+
 </body>
 </html>
+
 """
 
 
 # =========================================================
-# PDF CANVAS
+# EDIT ITEM
 # =========================================================
 
-class NumberedCanvas(canvas.Canvas):
+EDIT_TEMPLATE = """
 
-    def __init__(self, *args, **kwargs):
+<!DOCTYPE html>
 
-        super().__init__(*args, **kwargs)
+<html lang="ku" dir="rtl">
 
-        self._saved_page_states = []
+<head>
 
+<meta charset="UTF-8">
 
-    def showPage(self):
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
 
-        self._saved_page_states.append(
-            dict(self.__dict__)
-        )
+<title>Edit Item</title>
 
-        self._startPage()
+<style>
 
+body{
+    margin:0;
+    padding:20px;
+    background:#f5f8f5;
+    font-family:system-ui;
+}
 
-    def save(self):
+.card{
+    max-width:500px;
+    margin:30px auto;
+    background:white;
+    padding:25px;
+    border-radius:18px;
+    box-shadow:0 8px 30px rgba(0,0,0,.08);
+}
 
-        for state in self._saved_page_states:
+h2{
+    color:#176b2c;
+}
 
-            self.__dict__.update(state)
+input,select{
+    width:100%;
+    padding:12px;
+    margin:7px 0 15px;
+    border:1px solid #ccc;
+    border-radius:9px;
+    box-sizing:border-box;
+}
 
-            self.draw_page_decorations()
+button{
+    width:100%;
+    padding:13px;
+    border:0;
+    border-radius:9px;
+    background:#218838;
+    color:white;
+    font-weight:bold;
+}
 
-            super().showPage()
+.back{
+    display:block;
+    text-align:center;
+    margin-top:12px;
+    color:#176b2c;
+}
 
-        super().save()
+</style>
 
+</head>
 
-    def draw_page_decorations(self):
+<body>
 
-        logo_path = os.path.join(
-            os.getcwd(),
-            'logo.png'
-        )
+<div class="card">
 
-        if os.path.exists(logo_path):
+<h2>✏️ دەستکاریکردنی بابەت</h2>
 
-            self.saveState()
+<form method="POST">
 
-            if hasattr(
-                self,
-                'setFillAlpha'
-            ):
-                self.setFillAlpha(0.08)
+<label>بەش</label>
 
-            self.drawImage(
-                logo_path,
-                238,
-                70,
-                width=350,
-                height=350,
-                preserveAspectRatio=True,
-                mask='auto'
-            )
+<select name="category">
 
-            self.restoreState()
+{% for cat in categories %}
+
+<option
+value="{{ cat }}"
+{% if item.category == cat %}
+selected
+{% endif %}>
+
+{{ cat }}
+
+</option>
+
+{% endfor %}
+
+</select>
+
+<label>ناوی بابەت</label>
+
+<input
+name="item_name"
+value="{{ item.item_name }}"
+required>
+
+<label>یەکە</label>
+
+<input
+name="unit"
+value="{{ item.unit }}"
+required>
+
+<button>
+💾 پاشەکەوتکردن
+</button>
+
+</form>
+
+<a class="back" href="/settings">
+⬅️ گەڕانەوە بۆ سێتینگ
+</a>
+
+</div>
+
+</body>
+</html>
+
+"""
 
 
 # =========================================================
-# DEVICE
+# LOGIN
 # =========================================================
 
-def get_device_id():
+@app.route("/login", methods=["GET", "POST"])
+def login():
 
-    if 'device_id' not in session:
+    error = None
 
-        session['device_id'] = \
-            os.urandom(8).hex()
+    if request.method == "POST":
 
-    return session['device_id']
+        password = request.form.get("password", "")
 
+        if secrets.compare_digest(
+            password,
+            SHARED_PASSWORD
+        ):
 
-# =========================================================
-# NOTES
-# =========================================================
+            session.clear()
 
-def get_note(device_id):
+            session["authenticated"] = True
 
-    conn = sqlite3.connect(
-        "clean_qayma.db"
+            session["device_id"] = secrets.token_hex(16)
+
+            return redirect(url_for("index"))
+
+        error = "❌ ڕەمز هەڵەیە"
+
+    return render_template_string(
+        LOGIN_TEMPLATE,
+        error=error
     )
 
-    c = conn.cursor()
 
-    c.execute(
-        """
-        SELECT note_text
-        FROM notes
-        WHERE device_id = ?
-        """,
-        (device_id,)
+@app.route("/logout")
+def logout():
+
+    session.clear()
+
+    return redirect(url_for("login"))
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+@app.route("/")
+def index():
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    search = request.args.get("search", "").strip()
+
+    device_id = get_device_id()
+
+    return render_template_string(
+        HTML_TEMPLATE,
+        all_items=get_items(search),
+        orders=get_orders(device_id),
+        current_note=get_note(device_id),
+        search=search
     )
 
-    row = c.fetchone()
 
+# =========================================================
+# NOTE
+# =========================================================
+
+@app.route("/save_note", methods=["POST"])
+def save_note():
+
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
+
+    device_id = get_device_id()
+
+    note = request.form.get(
+        "note",
+        ""
+    ).strip()
+
+    conn = get_db()
+
+    conn.execute("""
+        INSERT OR REPLACE INTO notes
+        (device_id, note_text)
+        VALUES (?, ?)
+    """, (
+        device_id,
+        note
+    ))
+
+    conn.commit()
     conn.close()
 
-    return row[0] if row else ""
+    return jsonify({
+        "status": "success"
+    })
 
 
 # =========================================================
-# ORDERS
+# ADD ORDER
 # =========================================================
 
-def get_orders_list(device_id):
+@app.route("/quick_add_ajax", methods=["POST"])
+def quick_add_ajax():
 
-    conn = sqlite3.connect(
-        "clean_qayma.db"
-    )
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
 
-    c = conn.cursor()
+    try:
 
-    c.execute(
-        """
-        SELECT
-            id,
+        item_name = request.form.get(
+            "item_name",
+            ""
+        ).strip()
+
+        unit = request.form.get(
+            "unit",
+            ""
+        ).strip()
+
+        category = request.form.get(
+            "category",
+            ""
+        ).strip()
+
+        quantity = float(
+            request.form.get(
+                "quantity",
+                0
+            )
+        )
+
+        if not item_name:
+            raise ValueError("ناوی بابەت بەتاڵە")
+
+        if quantity <= 0:
+            raise ValueError("بڕ دەبێت لە سفر گەورەتر بێت")
+
+        device_id = get_device_id()
+
+        conn = get_db()
+
+        conn.execute("""
+            INSERT INTO orders
+            (
+                device_id,
+                item_name,
+                quantity,
+                unit,
+                category
+            )
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            device_id,
             item_name,
             quantity,
             unit,
             category
-        FROM orders
-        WHERE device_id = ?
-        """,
-        (device_id,)
-    )
+        ))
 
-    rows = c.fetchall()
+        conn.commit()
+        conn.close()
 
-    conn.close()
+        return jsonify({
+            "status": "success",
+            "orders": get_orders(device_id)
+        })
 
-    return [
-        {
-            "id": r[0],
-            "item_name": r[1],
-            "quantity": r[2],
-            "unit": r[3],
-            "category": r[4]
-        }
-        for r in rows
-    ]
+    except Exception as e:
+
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 400
 
 
 # =========================================================
-# LOGIN ROUTE
-# =========================================================
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-
-    if request.method == 'POST':
-
-        password = request.form.get(
-            'password',
-            ''
-        )
-
-        if password != SHARED_PASSWORD:
-
-            return render_template_string(
-                LOGIN_TEMPLATE,
-                error="ڕەمزی گشتی هەڵەیە!"
-            )
-
-        session['authenticated'] = True
-
-        get_device_id()
-
-        return redirect(
-            url_for('index')
-        )
-
-    return render_template_string(
-        LOGIN_TEMPLATE
-    )
-
-
-# =========================================================
-# LOGOUT
-# =========================================================
-
-@app.route('/logout')
-def logout():
-
-    session.pop(
-        'authenticated',
-        None
-    )
-
-    return redirect(
-        url_for('login')
-    )
-
-
-# =========================================================
-# HOME
-# =========================================================
-
-@app.route('/')
-def index():
-
-    if not session.get(
-        'authenticated'
-    ):
-        return redirect(
-            url_for('login')
-        )
-
-    device_id = get_device_id()
-
-    raw_orders = get_orders_list(
-        device_id
-    )
-
-    tuple_orders = [
-        (
-            o["id"],
-            o["item_name"],
-            o["quantity"],
-            o["unit"],
-            o["category"]
-        )
-        for o in raw_orders
-    ]
-
-    items_dict = \
-        get_all_items_dict()
-
-    current_note = \
-        get_note(device_id)
-
-    return render_template_string(
-        HTML_TEMPLATE,
-        all_items=items_dict,
-        orders=tuple_orders,
-        current_note=current_note
-    )
-
-
-# =========================================================
-# SAVE NOTE
+# DELETE SINGLE ORDER
 # =========================================================
 
 @app.route(
-    '/save_note',
-    methods=['POST']
+    "/delete_order/<int:order_id>",
+    methods=["POST"]
 )
-def save_note():
+def delete_order(order_id):
 
-    if not session.get(
-        'authenticated'
-    ):
-        return jsonify(
-            {"status": "unauthorized"}
-        ), 401
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
 
     device_id = get_device_id()
 
-    note_text = request.form.get(
-        'note',
-        ''
-    )
+    conn = get_db()
 
-    conn = sqlite3.connect(
-        "clean_qayma.db"
-    )
-
-    c = conn.cursor()
-
-    c.execute(
-        """
-        INSERT OR REPLACE INTO notes
-        (device_id, note_text)
-        VALUES (?, ?)
-        """,
-        (
-            device_id,
-            note_text
-        )
-    )
+    conn.execute("""
+        DELETE FROM orders
+        WHERE id = ?
+        AND device_id = ?
+    """, (
+        order_id,
+        device_id
+    ))
 
     conn.commit()
-
     conn.close()
 
-    return jsonify(
-        {"status": "success"}
-    )
+    return jsonify({
+        "status": "success",
+        "orders": get_orders(device_id)
+    })
+
+
+# =========================================================
+# CLEAR ORDERS
+# =========================================================
+
+@app.route("/clear_ajax")
+def clear_ajax():
+
+    if not logged_in():
+        return jsonify({
+            "status": "unauthorized"
+        }), 401
+
+    device_id = get_device_id()
+
+    conn = get_db()
+
+    conn.execute("""
+        DELETE FROM orders
+        WHERE device_id = ?
+    """, (
+        device_id,
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "orders": []
+    })
 
 
 # =========================================================
 # SETTINGS
 # =========================================================
 
-@app.route('/settings')
+@app.route("/settings")
 def settings_page():
 
-    if not session.get(
-        'authenticated'
-    ):
-        return redirect(
-            url_for('login')
-        )
+    if not logged_in():
+        return redirect(url_for("login"))
 
-    conn = sqlite3.connect(
-        "clean_qayma.db"
-    )
+    conn = get_db()
 
-    c = conn.cursor()
-
-    c.execute(
-        """
-        SELECT
-            id,
-            category,
-            item_name,
-            unit
-        FROM items
-        ORDER BY category, id DESC
-        """
-    )
-
-    rows = c.fetchall()
+    categories = [
+        r["name"]
+        for r in conn.execute("""
+            SELECT name
+            FROM categories
+            ORDER BY id
+        """).fetchall()
+    ]
 
     conn.close()
 
+    location, phone = get_company_info()
+
     return render_template_string(
         SETTINGS_TEMPLATE,
-        all_items_list=rows
+        items=get_all_items(),
+        categories=categories,
+        location=location,
+        phone=phone
     )
+
+
+@app.route("/save_company_info", methods=["POST"])
+def save_company_info():
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    location = request.form.get("location", "").strip() or "پارکا شەهیدا"
+    phone = request.form.get("phone", "").strip() or "07500113334"
+
+    conn = get_db()
+    conn.execute("""
+        UPDATE company_info
+        SET location = ?, phone = ?
+        WHERE id = 1
+    """, (location, phone))
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("settings_page"))
 
 
 # =========================================================
@@ -2012,57 +2074,151 @@ def settings_page():
 # =========================================================
 
 @app.route(
-    '/add_item_setting',
-    methods=['POST']
+    "/add_item_setting",
+    methods=["POST"]
 )
 def add_item_setting():
 
-    if not session.get(
-        'authenticated'
-    ):
-        return redirect(
-            url_for('login')
-        )
+    if not logged_in():
+        return redirect(url_for("login"))
 
     category = request.form.get(
-        'category'
-    )
+        "category",
+        ""
+    ).strip()
 
     item_name = request.form.get(
-        'item_name'
-    )
+        "item_name",
+        ""
+    ).strip()
 
     unit = request.form.get(
-        'unit'
-    )
+        "unit",
+        ""
+    ).strip()
 
-    if category and item_name and unit:
-
-        conn = sqlite3.connect(
-            "clean_qayma.db"
+    if not item_name or not unit:
+        return redirect(
+            url_for("settings_page")
         )
 
-        c = conn.cursor()
+    conn = get_db()
 
-        c.execute(
-            """
+    # جلوگیری لە دووبارەکردنەوەی هەمان بابەت
+    exists = conn.execute("""
+        SELECT id
+        FROM items
+        WHERE category = ?
+        AND item_name = ?
+    """, (
+        category,
+        item_name
+    )).fetchone()
+
+    if not exists:
+
+        conn.execute("""
             INSERT INTO items
             (category, item_name, unit)
             VALUES (?, ?, ?)
-            """,
-            (
-                category,
-                item_name,
-                unit
-            )
-        )
+        """, (
+            category,
+            item_name,
+            unit
+        ))
 
         conn.commit()
 
-        conn.close()
+    conn.close()
 
     return redirect(
-        url_for('settings_page')
+        url_for("settings_page")
+    )
+
+
+# =========================================================
+# EDIT ITEM
+# =========================================================
+
+@app.route(
+    "/edit_item/<int:item_id>",
+    methods=["GET", "POST"]
+)
+def edit_item(item_id):
+
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    item = conn.execute("""
+        SELECT *
+        FROM items
+        WHERE id = ?
+    """, (
+        item_id,
+    )).fetchone()
+
+    categories = [
+        r["name"]
+        for r in conn.execute("""
+            SELECT name
+            FROM categories
+            ORDER BY id
+        """).fetchall()
+    ]
+
+    if not item:
+
+        conn.close()
+
+        return redirect(
+            url_for("settings_page")
+        )
+
+    if request.method == "POST":
+
+        category = request.form.get(
+            "category",
+            ""
+        ).strip()
+
+        item_name = request.form.get(
+            "item_name",
+            ""
+        ).strip()
+
+        unit = request.form.get(
+            "unit",
+            ""
+        ).strip()
+
+        conn.execute("""
+            UPDATE items
+            SET category = ?,
+                item_name = ?,
+                unit = ?
+            WHERE id = ?
+        """, (
+            category,
+            item_name,
+            unit,
+            item_id
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return redirect(
+            url_for("settings_page")
+        )
+
+    conn.close()
+
+    return render_template_string(
+        EDIT_TEMPLATE,
+        item=item,
+        categories=categories
     )
 
 
@@ -2071,34 +2227,27 @@ def add_item_setting():
 # =========================================================
 
 @app.route(
-    '/delete_item_setting/<int:item_id>'
+    "/delete_item_setting/<int:item_id>"
 )
 def delete_item_setting(item_id):
 
-    if not session.get(
-        'authenticated'
-    ):
-        return redirect(
-            url_for('login')
-        )
+    if not logged_in():
+        return redirect(url_for("login"))
 
-    conn = sqlite3.connect(
-        "clean_qayma.db"
-    )
+    conn = get_db()
 
-    c = conn.cursor()
-
-    c.execute(
-        "DELETE FROM items WHERE id = ?",
-        (item_id,)
-    )
+    conn.execute("""
+        DELETE FROM items
+        WHERE id = ?
+    """, (
+        item_id,
+    ))
 
     conn.commit()
-
     conn.close()
 
     return redirect(
-        url_for('settings_page')
+        url_for("settings_page")
     )
 
 
@@ -2106,749 +2255,407 @@ def delete_item_setting(item_id):
 # LOGO
 # =========================================================
 
-@app.route('/logo.png')
-def get_logo():
+@app.route("/logo.png")
+def logo():
 
-    return send_from_directory(
+    logo_path = os.path.join(
         os.getcwd(),
-        'logo.png'
+        "logo.png"
     )
 
-
-# =========================================================
-# QUICK ADD
-# =========================================================
-
-@app.route(
-    '/quick_add_ajax',
-    methods=['POST']
-)
-def quick_add_ajax():
-
-    if not session.get(
-        'authenticated'
-    ):
-        return jsonify(
-            {"status": "unauthorized"}
-        ), 401
-
-    device_id = get_device_id()
-
-    conn = sqlite3.connect(
-        "clean_qayma.db"
-    )
-
-    c = conn.cursor()
-
-    c.execute(
-        """
-        INSERT INTO orders
-        (
-            device_id,
-            item_name,
-            quantity,
-            unit,
-            category
+    if os.path.exists(logo_path):
+        return send_file(
+            logo_path,
+            mimetype="image/png"
         )
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            device_id,
-            request.form['item_name'],
-            float(
-                request.form['quantity']
-            ),
-            request.form['unit'],
-            request.form['category']
-        )
-    )
 
-    conn.commit()
-
-    conn.close()
-
-    return jsonify(
-        {
-            "status": "success",
-            "orders":
-                get_orders_list(
-                    device_id
-                )
-        }
-    )
-
-
-# =========================================================
-# CLEAR ORDERS
-# =========================================================
-
-@app.route('/clear_ajax')
-def clear_ajax():
-
-    if not session.get(
-        'authenticated'
-    ):
-        return jsonify(
-            {"status": "unauthorized"}
-        ), 401
-
-    device_id = get_device_id()
-
-    conn = sqlite3.connect(
-        "clean_qayma.db"
-    )
-
-    c = conn.cursor()
-
-    c.execute(
-        """
-        DELETE FROM orders
-        WHERE device_id = ?
-        """,
-        (device_id,)
-    )
-
-    conn.commit()
-
-    conn.close()
-
-    return jsonify(
-        {
-            "status": "success",
-            "orders": []
-        }
-    )
+    return "", 404
 
 
 # =========================================================
 # PDF
-# تەنها ئەم بەشە بۆ چاککردنی کوردی/عەرەبی گۆڕاوە
 # =========================================================
 
-@app.route('/download_pdf')
+@app.route("/download_pdf")
 def download_pdf():
 
-    if not session.get(
-        'authenticated'
-    ):
-        return redirect(
-            url_for('login')
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    try:
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import (
+            getSampleStyleSheet,
+            ParagraphStyle
         )
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle
+        )
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
 
-    device_id = get_device_id()
+        device_id = get_device_id()
 
-    orders = get_orders_list(
-        device_id
-    )
+        orders = get_orders(device_id)
 
-    user_note = get_note(
-        device_id
-    )
+        note = get_note(device_id)
+        location, phone = get_company_info()
 
+        # -------------------------------------------------
+        # Font
+        # -------------------------------------------------
 
-    # -----------------------------------------------------
-    # KURDISH / ARABIC FONT
-    # -----------------------------------------------------
+        font_name = "Helvetica"
 
-    font_font_name = 'Helvetica'
+        font_candidates = [
 
-    font_paths = [
+            os.path.join(
+                os.getcwd(),
+                "Amiri",
+                "Amiri-Regular.ttf"
+            ),
 
-        os.path.join(
-            os.getcwd(),
-            'Amiri',
-            'Amiri-Regular.ttf'
-        ),
+            os.path.join(
+                os.getcwd(),
+                "Amiri-Regular.ttf"
+            ),
 
-        os.path.join(
-            os.getcwd(),
-            'fonts',
-            'NotoNaskhArabic-Regular.ttf'
-        ),
+            "C:\\Windows\\Fonts\\arial.ttf"
 
-        "C:\\Windows\\Fonts\\arial.ttf",
+        ]
 
-        "C:\\Windows\\Fonts\\tahoma.ttf"
-    ]
+        for path in font_candidates:
 
+            if os.path.exists(path):
 
-    for font_path in font_paths:
+                try:
 
-        if os.path.isfile(font_path):
-
-            try:
-
-                pdfmetrics.registerFont(
-                    TTFont(
-                        'ArabicFont',
-                        font_path
+                    pdfmetrics.registerFont(
+                        TTFont(
+                            "OrganicArabic",
+                            path
+                        )
                     )
-                )
 
-                font_font_name = \
-                    'ArabicFont'
+                    font_name = "OrganicArabic"
 
-                print(
-                    "PDF Kurdish Font:",
-                    font_path
-                )
+                    break
 
-                break
+                except:
+                    pass
 
-            except Exception as e:
+        # -------------------------------------------------
+        # PDF
+        # -------------------------------------------------
 
-                print(
-                    "Font error:",
-                    e
-                )
-
-
-    # -----------------------------------------------------
-    # PDF FILE
-    # -----------------------------------------------------
-
-    pdf_filename = \
-        "Organic_Juices_Qayma.pdf"
-
-
-    doc = SimpleDocTemplate(
-
-        pdf_filename,
-
-        pagesize=landscape(A4),
-
-        rightMargin=30,
-
-        leftMargin=30,
-
-        topMargin=25,
-
-        bottomMargin=25
-    )
-
-
-    story = []
-
-    styles = \
-        getSampleStyleSheet()
-
-
-    # -----------------------------------------------------
-    # PDF STYLES
-    # -----------------------------------------------------
-
-    title_style = ParagraphStyle(
-
-        'KurdishTitle',
-
-        parent=styles['Heading1'],
-
-        alignment=2,
-
-        fontSize=22,
-
-        leading=30,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#1b5e20'
+        filename = (
+            "Organic_Juices_Qayma_"
+            + datetime.now().strftime(
+                "%Y%m%d_%H%M"
             )
-    )
-
-
-    subtitle_style = ParagraphStyle(
-
-        'KurdishSubtitle',
-
-        parent=styles['Normal'],
-
-        alignment=2,
-
-        fontSize=11,
-
-        leading=18,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#33691e'
-            )
-    )
-
-
-    note_style = ParagraphStyle(
-
-        'KurdishNote',
-
-        parent=styles['Normal'],
-
-        alignment=2,
-
-        fontSize=12,
-
-        leading=20,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#b71c1c'
-            )
-    )
-
-
-    section_heading_style = ParagraphStyle(
-
-        'KurdishSection',
-
-        parent=styles['Heading2'],
-
-        alignment=2,
-
-        fontSize=14,
-
-        leading=22,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#2e7d32'
-            ),
-
-        spaceBefore=12,
-
-        spaceAfter=6
-    )
-
-
-    header_right_style = ParagraphStyle(
-
-        'HeaderRight',
-
-        parent=styles['Normal'],
-
-        alignment=2,
-
-        fontSize=11,
-
-        leading=17,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#1b5e20'
-            )
-    )
-
-
-    header_center_style = ParagraphStyle(
-
-        'HeaderCenter',
-
-        parent=styles['Normal'],
-
-        alignment=1,
-
-        fontSize=11,
-
-        leading=17,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#1b5e20'
-            )
-    )
-
-
-    header_left_style = ParagraphStyle(
-
-        'HeaderLeft',
-
-        parent=styles['Normal'],
-
-        alignment=0,
-
-        fontSize=11,
-
-        leading=17,
-
-        fontName=font_font_name,
-
-        textColor=
-            colors.HexColor(
-                '#1b5e20'
-            )
-    )
-
-
-    cell_right_style = ParagraphStyle(
-
-        'CellRight',
-
-        parent=styles['Normal'],
-
-        alignment=2,
-
-        fontSize=10,
-
-        leading=17,
-
-        fontName=font_font_name
-    )
-
-
-    cell_center_style = ParagraphStyle(
-
-        'CellCenter',
-
-        parent=styles['Normal'],
-
-        alignment=1,
-
-        fontSize=10,
-
-        leading=17,
-
-        fontName=font_font_name
-    )
-
-
-    cell_left_style = ParagraphStyle(
-
-        'CellLeft',
-
-        parent=styles['Normal'],
-
-        alignment=0,
-
-        fontSize=10,
-
-        leading=17,
-
-        fontName=font_font_name
-    )
-
-
-    # -----------------------------------------------------
-    # TITLE
-    # -----------------------------------------------------
-
-    story.append(
-
-        Paragraph(
-
-            reshape_text(
-                "کۆمپانییا ئورگانیک جویس - قایما داواکری فەرمی"
-            ),
-
-            title_style
+            + ".pdf"
         )
-    )
 
-
-    story.append(
-        Spacer(1, 4)
-    )
-
-
-    # -----------------------------------------------------
-    # DATE
-    # -----------------------------------------------------
-
-    date_text = datetime.now().strftime(
-        '%Y-%m-%d %H:%M'
-    )
-
-
-    story.append(
-
-        Paragraph(
-
-            f"Date: {date_text}",
-
-            subtitle_style
+        doc = SimpleDocTemplate(
+            filename,
+            pagesize=A4,
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=30,
+            bottomMargin=30
         )
-    )
 
+        styles = getSampleStyleSheet()
 
-    # -----------------------------------------------------
-    # NOTE
-    # -----------------------------------------------------
+        title_style = ParagraphStyle(
+            "Title",
+            parent=styles["Heading1"],
+            fontName=font_name,
+            fontSize=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor(
+                "#176b2c"
+            )
+        )
 
-    if user_note:
+        normal_style = ParagraphStyle(
+            "NormalArabic",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=10,
+            alignment=TA_RIGHT
+        )
 
+        center_style = ParagraphStyle(
+            "Center",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=10,
+            alignment=TA_CENTER
+        )
+
+        story = []
+
+        # Header
         story.append(
-            Spacer(1, 8)
+            Paragraph(
+                "کۆمپانییا ئۆرگانیک جویس",
+                title_style
+            )
         )
 
         story.append(
+            Spacer(1, 5)
+        )
 
+        story.append(
             Paragraph(
+                "لیستا قایمە",
+                center_style
+            )
+        )
 
-                reshape_text(
-                    "تێبینی: " +
-                    user_note
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(
+            "شوێن: " + str(location) + " | مۆبایل: " + str(phone),
+            center_style
+        ))
+
+        story.append(
+            Spacer(1, 5)
+        )
+
+        story.append(
+            Paragraph(
+                "بەروار: "
+                + datetime.now().strftime(
+                    "%Y-%m-%d"
+                )
+                + " | کات: "
+                + datetime.now().strftime(
+                    "%H:%M"
                 ),
-
-                note_style
+                center_style
             )
         )
 
-
-    story.append(
-        Spacer(1, 12)
-    )
-
-
-    # -----------------------------------------------------
-    # GROUP BY CATEGORY
-    # -----------------------------------------------------
-
-    categories = {}
-
-
-    for item in orders:
-
-        cat = item["category"]
-
-        if cat not in categories:
-
-            categories[cat] = []
-
-        categories[cat].append(
-            item
+        story.append(
+            Spacer(1, 15)
         )
 
+        # Note
+        if note:
 
-    # -----------------------------------------------------
-    # TABLE
-    # -----------------------------------------------------
-
-    col_widths = [
-        320,
-        110,
-        100
-    ]
-
-
-    for cat_name, cat_items \
-            in categories.items():
-
-        cat_story = []
-
-
-        # Category title
-
-        cat_story.append(
-
-            Paragraph(
-
-                reshape_text(
-                    "بەش: " +
-                    cat_name
-                ),
-
-                section_heading_style
+            story.append(
+                Paragraph(
+                    "<b>تێبینی:</b> "
+                    + note,
+                    normal_style
+                )
             )
-        )
 
-
-        # Headers
-
-        table_headers = [
-
-            Paragraph(
-                reshape_text("بابەت"),
-                header_right_style
-            ),
-
-            Paragraph(
-                reshape_text("بڕ"),
-                header_center_style
-            ),
-
-            Paragraph(
-                reshape_text("یەکە"),
-                header_left_style
+            story.append(
+                Spacer(1, 10)
             )
-        ]
 
-
+        # Table
         table_data = [
-            table_headers
-        ]
 
-
-        # -------------------------------------------------
-        # ITEMS
-        # -------------------------------------------------
-
-        for item in cat_items:
-
-            item_name = reshape_text(
-                item["item_name"]
-            )
-
-            unit = reshape_text(
-                item["unit"]
-            )
-
-
-            row = [
-
+            [
                 Paragraph(
-                    item_name,
-                    cell_right_style
+                    "بەش",
+                    center_style
                 ),
 
                 Paragraph(
-                    str(item["quantity"]),
-                    cell_center_style
+                    "بابەت",
+                    center_style
                 ),
 
                 Paragraph(
-                    unit,
-                    cell_left_style
+                    "بڕ",
+                    center_style
+                ),
+
+                Paragraph(
+                    "یەکە",
+                    center_style
                 )
             ]
 
+        ]
 
-            table_data.append(
-                row
-            )
+        for order in orders:
 
+            table_data.append([
 
-        # -------------------------------------------------
-        # CREATE TABLE
-        # -------------------------------------------------
+                Paragraph(
+                    str(order["category"]),
+                    center_style
+                ),
 
-        t = Table(
+                Paragraph(
+                    "<b>"
+                    + str(order["item_name"])
+                    + "</b>",
+                    center_style
+                ),
 
+                Paragraph(
+                    str(order["quantity"]),
+                    center_style
+                ),
+
+                Paragraph(
+                    str(order["unit"]),
+                    center_style
+                )
+
+            ])
+
+        if not orders:
+
+            table_data.append([
+
+                Paragraph(
+                    "قایمە بەتاڵە",
+                    center_style
+                ),
+                "",
+                "",
+                ""
+
+            ])
+
+        table = Table(
             table_data,
-
-            colWidths=col_widths,
-
-            repeatRows=1,
-
-            hAlign='RIGHT'
+            colWidths=[
+                90,
+                230,
+                70,
+                70
+            ],
+            repeatRows=1
         )
 
-
-        t.setStyle(
-
+        table.setStyle(
             TableStyle([
 
                 (
-                    'BACKGROUND',
+                    "BACKGROUND",
                     (0, 0),
                     (-1, 0),
                     colors.HexColor(
-                        '#f5f5f5'
+                        "#e8f5e9"
                     )
                 ),
 
                 (
-                    'GRID',
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor(
+                        "#176b2c"
+                    )
+                ),
+
+                (
+                    "GRID",
                     (0, 0),
                     (-1, -1),
                     0.5,
                     colors.HexColor(
-                        '#cccccc'
+                        "#cfd8cf"
                     )
                 ),
 
                 (
-                    'VALIGN',
+                    "VALIGN",
                     (0, 0),
                     (-1, -1),
-                    'MIDDLE'
+                    "MIDDLE"
                 ),
 
                 (
-                    'ALIGN',
-                    (0, 0),
-                    (0, -1),
-                    'RIGHT'
-                ),
-
-                (
-                    'ALIGN',
-                    (1, 0),
-                    (1, -1),
-                    'CENTER'
-                ),
-
-                (
-                    'ALIGN',
-                    (2, 0),
-                    (2, -1),
-                    'LEFT'
-                ),
-
-                (
-                    'TOPPADDING',
+                    "ALIGN",
                     (0, 0),
                     (-1, -1),
-                    7
+                    "CENTER"
                 ),
 
                 (
-                    'BOTTOMPADDING',
-                    (0, 0),
-                    (-1, -1),
-                    7
-                ),
-
-                (
-                    'LEFTPADDING',
+                    "TOPPADDING",
                     (0, 0),
                     (-1, -1),
                     8
                 ),
 
                 (
-                    'RIGHTPADDING',
+                    "BOTTOMPADDING",
                     (0, 0),
                     (-1, -1),
                     8
                 )
+
             ])
         )
 
-
-        cat_story.append(t)
-
-        cat_story.append(
-            Spacer(1, 10)
-        )
-
+        story.append(table)
 
         story.append(
-            KeepTogether(cat_story)
+            Spacer(1, 15)
         )
 
+        story.append(
+            Paragraph(
+                "کۆی بابەتەکان: "
+                + str(len(orders)),
+                center_style
+            )
+        )
 
-    # -----------------------------------------------------
-    # BUILD PDF
-    # -----------------------------------------------------
+        def draw_watermark(canvas, doc):
+            canvas.saveState()
+            try:
+                from reportlab.lib.utils import ImageReader
+                logo_path = os.path.join(os.getcwd(), "logo.png")
+                if os.path.exists(logo_path):
+                    img = ImageReader(logo_path)
+                    iw, ih = img.getSize()
+                    target_w = 300
+                    target_h = target_w * ih / float(iw) if iw else 300
+                    x = (A4[0] - target_w) / 2
+                    y = (A4[1] - target_h) / 2
+                    if hasattr(canvas, "setFillAlpha"):
+                        canvas.setFillAlpha(0.08)
+                    canvas.drawImage(img, x, y, width=target_w, height=target_h, mask="auto", preserveAspectRatio=True)
+                    if hasattr(canvas, "setFillAlpha"):
+                        canvas.setFillAlpha(1)
+            except Exception:
+                pass
+            canvas.restoreState()
 
-    doc.build(
-        story,
-        canvasmaker=NumberedCanvas
-    )
+        doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
 
+        return send_file(
+            filename,
+            as_attachment=True
+        )
 
-    return send_file(
-        pdf_filename,
-        as_attachment=True
-    )
+    except Exception as e:
+
+        return (
+            "PDF Error: "
+            + str(e),
+            500
+        )
 
 
 # =========================================================
@@ -2859,12 +2666,15 @@ if __name__ == "__main__":
 
     init_db()
 
-    app.run(
-        host='0.0.0.0',
-        port=int(
-            os.environ.get(
-                "PORT",
-                5000
-            )
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
         )
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False
     )
