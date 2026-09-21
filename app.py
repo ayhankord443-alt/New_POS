@@ -2283,398 +2283,355 @@ def download_pdf():
         return redirect(url_for("login"))
 
     try:
-
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
-        from reportlab.lib.styles import (
-            getSampleStyleSheet,
-            ParagraphStyle
-        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
         from reportlab.platypus import (
-            SimpleDocTemplate,
-            Paragraph,
-            Spacer,
-            Table,
-            TableStyle
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
         )
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.lib.utils import ImageReader
 
         device_id = get_device_id()
-
         orders = get_orders(device_id)
-
         note = get_note(device_id)
         location, phone = get_company_info()
 
         # -------------------------------------------------
         # Font
         # -------------------------------------------------
-
         font_name = "Helvetica"
-
         font_candidates = [
-
-            os.path.join(
-                os.getcwd(),
-                "Amiri",
-                "Amiri-Regular.ttf"
-            ),
-
-            os.path.join(
-                os.getcwd(),
-                "Amiri-Regular.ttf"
-            ),
-
+            os.path.join(os.getcwd(), "Amiri", "Amiri-Regular.ttf"),
+            os.path.join(os.getcwd(), "Amiri-Regular.ttf"),
             "C:\\Windows\\Fonts\\arial.ttf"
-
         ]
 
         for path in font_candidates:
-
             if os.path.exists(path):
-
                 try:
-
-                    pdfmetrics.registerFont(
-                        TTFont(
-                            "OrganicArabic",
-                            path
-                        )
-                    )
-
+                    pdfmetrics.registerFont(TTFont("OrganicArabic", path))
                     font_name = "OrganicArabic"
-
                     break
-
-                except:
+                except Exception:
                     pass
 
         # -------------------------------------------------
-        # PDF
+        # PDF document
         # -------------------------------------------------
-
         filename = (
             "Organic_Juices_Qayma_"
-            + datetime.now().strftime(
-                "%Y%m%d_%H%M"
-            )
+            + datetime.now().strftime("%Y%m%d_%H%M")
             + ".pdf"
         )
 
         doc = SimpleDocTemplate(
             filename,
             pagesize=A4,
-            rightMargin=30,
-            leftMargin=30,
-            topMargin=30,
-            bottomMargin=30
+            rightMargin=18,
+            leftMargin=18,
+            topMargin=18,
+            bottomMargin=18
         )
 
         styles = getSampleStyleSheet()
-
         title_style = ParagraphStyle(
-            "Title",
-            parent=styles["Heading1"],
-            fontName=font_name,
-            fontSize=20,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor(
-                "#176b2c"
-            )
+            "QaymaTitle", parent=styles["Heading1"], fontName=font_name,
+            fontSize=22, leading=25, alignment=TA_CENTER,
+            textColor=colors.white, spaceAfter=0
+        )
+        brand_style = ParagraphStyle(
+            "Brand", parent=styles["Normal"], fontName="Helvetica-Bold",
+            fontSize=19, leading=21, alignment=TA_CENTER,
+            textColor=colors.white
+        )
+        info_style = ParagraphStyle(
+            "Info", parent=styles["Normal"], fontName=font_name,
+            fontSize=9.5, leading=12, alignment=TA_CENTER,
+            textColor=colors.HexColor("#202020")
+        )
+        section_style = ParagraphStyle(
+            "Section", parent=styles["Normal"], fontName=font_name,
+            fontSize=10.5, leading=12, alignment=TA_CENTER,
+            textColor=colors.white
+        )
+        head_style = ParagraphStyle(
+            "TableHead", parent=styles["Normal"], fontName=font_name,
+            fontSize=8.5, leading=10, alignment=TA_CENTER,
+            textColor=colors.HexColor("#111111")
+        )
+        cell_style = ParagraphStyle(
+            "Cell", parent=styles["Normal"], fontName=font_name,
+            fontSize=7.7, leading=9.2, alignment=TA_CENTER,
+            textColor=colors.HexColor("#111111")
+        )
+        footer_style = ParagraphStyle(
+            "Footer", parent=styles["Normal"], fontName="Helvetica-Bold",
+            fontSize=9, leading=11, alignment=TA_CENTER,
+            textColor=colors.HexColor("#176b2c")
         )
 
-        normal_style = ParagraphStyle(
-            "NormalArabic",
-            parent=styles["Normal"],
-            fontName=font_name,
-            fontSize=10,
-            alignment=TA_RIGHT
-        )
+        # -------------------------------------------------
+        # Unit display: Arabic as requested
+        # -------------------------------------------------
+        def arabic_unit(unit):
+            u = str(unit or "").strip().lower()
+            mapping = {
+                "دانە": "قطعة",
+                "دانه": "قطعة",
+                "دانة": "قطعة",
+                "کیلو": "كغم",
+                "كيلو": "كغم",
+                "کغم": "كغم",
+                "kg": "كغم",
+                "کارتۆن": "كارتون",
+                "كارتون": "كارتون",
+                "کارتن": "كارتون",
+                "لبان": "لبان",
+                "لیتر": "لتر",
+                "ليتر": "لتر",
+                "l": "لتر",
+                "بۆکس": "علبة",
+                "بوكس": "علبة",
+                "box": "علبة",
+            }
+            return mapping.get(u, str(unit))
 
-        center_style = ParagraphStyle(
-            "Center",
-            parent=styles["Normal"],
-            fontName=font_name,
-            fontSize=10,
-            alignment=TA_CENTER
-        )
+        def fmt_qty(value):
+            try:
+                number = float(value)
+                if number.is_integer():
+                    return str(int(number))
+                return f"{number:g}"
+            except Exception:
+                return str(value)
+
+        # -------------------------------------------------
+        # Build complete item lists, then place current qty
+        # on matching items. This keeps blank items visible.
+        # -------------------------------------------------
+        conn = get_db()
+        item_rows = conn.execute("""
+            SELECT category, item_name, unit
+            FROM items
+            ORDER BY id ASC
+        """).fetchall()
+        conn.close()
+
+        qty_map = {}
+        for order in orders:
+            key = (str(order["category"]), str(order["item_name"]))
+            qty_map[key] = {
+                "quantity": order["quantity"],
+                "unit": order["unit"]
+            }
+
+        categories = {
+            "مەعمەل": [],
+            "مەغزەن": [],
+            "فێقی": []
+        }
+
+        for row in item_rows:
+            cat = str(row["category"])
+            if cat not in categories:
+                categories[cat] = []
+            key = (cat, str(row["item_name"]))
+            q = qty_map.get(key)
+            categories[cat].append({
+                "name": row["item_name"],
+                "unit": q["unit"] if q else row["unit"],
+                "quantity": q["quantity"] if q else ""
+            })
+
+        # If an order exists for an item that is no longer in items,
+        # still show it in its category.
+        existing_keys = {
+            (str(r["category"]), str(r["item_name"])) for r in item_rows
+        }
+        for order in orders:
+            key = (str(order["category"]), str(order["item_name"]))
+            if key not in existing_keys:
+                cat = str(order["category"])
+                if cat not in categories:
+                    categories[cat] = []
+                categories[cat].append({
+                    "name": order["item_name"],
+                    "unit": order["unit"],
+                    "quantity": order["quantity"]
+                })
 
         story = []
 
-        # Header
-        story.append(
-            Paragraph(
-                "کۆمپانییا ئۆرگانیک جویس",
-                title_style
-            )
+        # -------------------------------------------------
+        # Branded black header with logo
+        # -------------------------------------------------
+        logo_path = os.path.join(os.getcwd(), "logo.png")
+        header_cells = []
+        if os.path.exists(logo_path):
+            try:
+                logo_img = Image(logo_path, width=42, height=42)
+                header_cells.append(logo_img)
+            except Exception:
+                header_cells.append("")
+        else:
+            header_cells.append("")
+
+        header_cells.append(
+            Paragraph("ORGANIC JUSTICE S", brand_style)
         )
 
-        story.append(
-            Spacer(1, 5)
-        )
+        if os.path.exists(logo_path):
+            try:
+                logo_img2 = Image(logo_path, width=42, height=42)
+                header_cells.append(logo_img2)
+            except Exception:
+                header_cells.append("")
+        else:
+            header_cells.append("")
 
-        story.append(
-            Paragraph(
-                "لیستا قایمە",
-                center_style
-            )
-        )
+        header = Table([header_cells], colWidths=[55, 467, 55], rowHeights=[52])
+        header.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(header)
+        story.append(Spacer(1, 7))
 
-        story.append(Spacer(1, 3))
-        story.append(Paragraph(
-            "شوێن: " + str(location) + " | مۆبایل: " + str(phone),
-            center_style
-        ))
-
-        story.append(
-            Spacer(1, 5)
-        )
-
-        story.append(
-            Paragraph(
-                "بەروار: "
-                + datetime.now().strftime(
-                    "%Y-%m-%d"
-                )
-                + " | کات: "
-                + datetime.now().strftime(
-                    "%H:%M"
-                ),
-                center_style
-            )
-        )
-
-        story.append(
-            Spacer(1, 15)
-        )
-
-        # Note
-        if note:
-
-            story.append(
-                Paragraph(
-                    "<b>تێبینی:</b> "
-                    + note,
-                    normal_style
-                )
-            )
-
-            story.append(
-                Spacer(1, 10)
-            )
-
-        # Table
-        table_data = [
-
+        info = Table([
             [
-                Paragraph(
-                    "بەش",
-                    center_style
-                ),
-
-                Paragraph(
-                    "بابەت",
-                    center_style
-                ),
-
-                Paragraph(
-                    "بڕ",
-                    center_style
-                ),
-
-                Paragraph(
-                    "یەکە",
-                    center_style
-                )
+                Paragraph("ناڤی قایمە: صالح یوسف", info_style),
+                Paragraph("بەروار: " + datetime.now().strftime("%Y / %m / %d"), info_style)
+            ],
+            [
+                Paragraph("شوێن: " + str(location), info_style),
+                Paragraph("مۆبایل: " + str(phone), info_style)
             ]
+        ], colWidths=[289, 288])
+        info.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#222222")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#aaaaaa")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(info)
+        story.append(Spacer(1, 9))
 
-        ]
+        if note:
+            story.append(Paragraph("تێبینی: " + str(note), info_style))
+            story.append(Spacer(1, 6))
 
-        for order in orders:
-
-            table_data.append([
-
-                Paragraph(
-                    str(order["category"]),
-                    center_style
-                ),
-
-                Paragraph(
-                    "<b>"
-                    + str(order["item_name"])
-                    + "</b>",
-                    center_style
-                ),
-
-                Paragraph(
-                    str(order["quantity"]),
-                    center_style
-                ),
-
-                Paragraph(
-                    str(order["unit"]),
-                    center_style
-                )
-
-            ])
-
-        if not orders:
-
-            table_data.append([
-
-                Paragraph(
-                    "قایمە بەتاڵە",
-                    center_style
-                ),
-                "",
+        # -------------------------------------------------
+        # Three category tables: Kurdish section names,
+        # Arabic column headings and Arabic units.
+        # -------------------------------------------------
+        def make_category_table(title, rows):
+            data = [[
+                Paragraph(title, section_style),
                 "",
                 ""
+            ], [
+                Paragraph("عدد", head_style),
+                Paragraph("مادة", head_style),
+                Paragraph("وحدة", head_style)
+            ]]
 
-            ])
+            for row in rows:
+                qty = "" if row["quantity"] == "" else fmt_qty(row["quantity"])
+                data.append([
+                    Paragraph(qty, cell_style),
+                    Paragraph(str(row["name"]), cell_style),
+                    Paragraph(arabic_unit(row["unit"]), cell_style)
+                ])
 
-        table = Table(
-            table_data,
-            colWidths=[
-                90,
-                230,
-                70,
-                70
-            ],
-            repeatRows=1
+            if not rows:
+                data.append([
+                    Paragraph("", cell_style),
+                    Paragraph("هیچ بابەتێک نییە", cell_style),
+                    Paragraph("", cell_style)
+                ])
+
+            tbl = Table(data, colWidths=[38, 104, 38], repeatRows=2)
+            tbl.setStyle(TableStyle([
+                ("SPAN", (0, 0), (-1, 0)),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#eeeeee")),
+                ("GRID", (0, 0), (-1, -1), 0.55, colors.HexColor("#777777")),
+                ("BOX", (0, 0), (-1, -1), 1.0, colors.black),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3.2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3.2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+            ]))
+            return tbl
+
+        # Order is intentionally: laboratory, storage, fruits.
+        table_lab = make_category_table("مواد معمل", categories.get("مەعمەل", []))
+        table_store = make_category_table("مواد مخزن", categories.get("مەغزەن", []))
+        table_fruits = make_category_table("فێقی", categories.get("فێقی", []))
+
+        tables_row = Table(
+            [[table_lab, table_store, table_fruits]],
+            colWidths=[180, 180, 180]
         )
+        tables_row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(tables_row)
+        story.append(Spacer(1, 8))
 
-        table.setStyle(
-            TableStyle([
+        total_items = sum(len(v) for v in categories.values())
+        story.append(Paragraph("کۆی بابەتەکان: " + str(total_items), footer_style))
 
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor(
-                        "#e8f5e9"
-                    )
-                ),
-
-                (
-                    "TEXTCOLOR",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor(
-                        "#176b2c"
-                    )
-                ),
-
-                (
-                    "GRID",
-                    (0, 0),
-                    (-1, -1),
-                    0.5,
-                    colors.HexColor(
-                        "#cfd8cf"
-                    )
-                ),
-
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "MIDDLE"
-                ),
-
-                (
-                    "ALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "CENTER"
-                ),
-
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    8
-                ),
-
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    8
-                )
-
-            ])
-        )
-
-        story.append(table)
-
-        story.append(
-            Spacer(1, 15)
-        )
-
-        story.append(
-            Paragraph(
-                "کۆی بابەتەکان: "
-                + str(len(orders)),
-                center_style
-            )
-        )
-
-        def draw_watermark(canvas, doc):
+        # -------------------------------------------------
+        # Large, faint logo watermark behind the page
+        # -------------------------------------------------
+        def draw_watermark(canvas, doc_obj):
             canvas.saveState()
             try:
-                from reportlab.lib.utils import ImageReader
-                logo_path = os.path.join(os.getcwd(), "logo.png")
                 if os.path.exists(logo_path):
                     img = ImageReader(logo_path)
                     iw, ih = img.getSize()
-                    target_w = 300
-                    target_h = target_w * ih / float(iw) if iw else 300
+                    target_w = 330
+                    target_h = target_w * ih / float(iw) if iw else 330
                     x = (A4[0] - target_w) / 2
-                    y = (A4[1] - target_h) / 2
+                    y = (A4[1] - target_h) / 2 - 30
                     if hasattr(canvas, "setFillAlpha"):
-                        canvas.setFillAlpha(0.08)
-                    canvas.drawImage(img, x, y, width=target_w, height=target_h, mask="auto", preserveAspectRatio=True)
+                        canvas.setFillAlpha(0.055)
+                    canvas.drawImage(
+                        img, x, y,
+                        width=target_w, height=target_h,
+                        mask="auto", preserveAspectRatio=True
+                    )
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(1)
             except Exception:
                 pass
             canvas.restoreState()
 
-        doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
-
-        return send_file(
-            filename,
-            as_attachment=True
+        doc.build(
+            story,
+            onFirstPage=draw_watermark,
+            onLaterPages=draw_watermark
         )
+
+        return send_file(filename, as_attachment=True)
 
     except Exception as e:
-
-        return (
-            "PDF Error: "
-            + str(e),
-            500
-        )
-
-
-# =========================================================
-# RUN
-# =========================================================
-
-if __name__ == "__main__":
-
-    init_db()
-
-    port = int(
-        os.environ.get(
-            "PORT",
-            5000
-        )
-    )
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False
-    )
+        return "PDF Error: " + str(e), 500
