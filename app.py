@@ -2287,36 +2287,38 @@ def download_pdf():
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.utils import ImageReader
+        from xml.sax.saxutils import escape as xml_escape
 
-        # Arabic/Kurdish shaping and right-to-left display are REQUIRED
-        # before sending any Arabic/Kurdish text to ReportLab Paragraph.
-        # This prevents disconnected/reversed characters in the generated PDF.
+        # =====================================================
+        # REQUIRED RTL SUPPORT
+        # Every Kurdish/Arabic string MUST pass through these
+        # two steps before it is given to ReportLab Paragraph.
+        # =====================================================
         try:
             import arabic_reshaper
             from bidi.algorithm import get_display
         except ImportError as exc:
             raise RuntimeError(
-                "Arabic PDF support requires 'arabic-reshaper' and 'python-bidi'. "
-                "Install them with: pip install arabic-reshaper python-bidi"
+                "Arabic/Kurdish PDF support requires arabic-reshaper and "
+                "python-bidi. Install with: pip install arabic-reshaper python-bidi"
             ) from exc
 
-        from xml.sax.saxutils import escape as xml_escape
-
         def pdf_text(value):
-            """Prepare every text value for ReportLab Paragraph.
+            """Convert logical Arabic/Kurdish text to shaped visual text.
 
-            arabic_reshaper joins Arabic/Kurdish glyphs correctly and
-            python-bidi converts logical RTL text to the visual order
-            expected by ReportLab. XML escaping is applied afterwards so
-            user-entered names/notes cannot break Paragraph markup.
+            Order is important:
+              1) arabic_reshaper.reshape() joins Arabic/Kurdish glyphs.
+              2) bidi.get_display() converts RTL logical order to the visual
+                 order ReportLab expects.
+              3) XML escaping protects Paragraph markup.
             """
             text = "" if value is None else str(value)
             reshaped = arabic_reshaper.reshape(text)
-            visual = get_display(reshaped)
+            visual = get_display(reshaped, base_dir="R")
             return xml_escape(visual)
 
         device_id = get_device_id()
@@ -2324,50 +2326,41 @@ def download_pdf():
         note = get_note(device_id)
         location, phone = get_company_info()
 
-        # -------------------------------------------------
-        # Professional Arabic/Kurdish font.
-        # Amiri has clear, readable Arabic glyphs and a bold
-        # face so important text stays black and strong.
-        # -------------------------------------------------
-        font_regular = "Helvetica"
-        font_bold = "Helvetica-Bold"
-
-        # Prefer Amiri for Arabic/Kurdish. Look in the project first, then
-        # common Linux font locations. Register regular and bold separately
-        # so the PDF still works if only one face is available.
+        # =====================================================
+        # AMIRI FONT - REQUIRED, NO HELVETICA FALLBACK
+        # =====================================================
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        font_candidates = [
-            (
-                os.path.join(base_dir, "Amiri", "Amiri-Regular.ttf"),
-                os.path.join(base_dir, "Amiri", "Amiri-Bold.ttf"),
-            ),
-            (
-                os.path.join(base_dir, "Amiri-Regular.ttf"),
-                os.path.join(base_dir, "Amiri-Bold.ttf"),
-            ),
-            (
-                "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",
-                "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Bold.ttf",
-            ),
-        ]
+        amiri_regular_path = os.path.join(
+            base_dir, "Amiri", "Amiri-Regular.ttf"
+        )
+        amiri_bold_path = os.path.join(
+            base_dir, "Amiri", "Amiri-Bold.ttf"
+        )
 
-        for regular_path, bold_path in font_candidates:
-            try:
-                if os.path.exists(regular_path):
-                    pdfmetrics.registerFont(TTFont("OrganicAmiri", regular_path))
-                    font_regular = "OrganicAmiri"
-                if os.path.exists(bold_path):
-                    pdfmetrics.registerFont(TTFont("OrganicAmiriBold", bold_path))
-                    font_bold = "OrganicAmiriBold"
-                if font_regular == "OrganicAmiri":
-                    break
-            except Exception:
-                font_regular = "Helvetica"
-                font_bold = "Helvetica-Bold"
+        if not os.path.isfile(amiri_regular_path):
+            raise FileNotFoundError(
+                "Amiri font not found: " + amiri_regular_path
+            )
+
+        # Register once so repeated PDF downloads do not re-register the font.
+        if "OrganicAmiri" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(
+                TTFont("OrganicAmiri", amiri_regular_path)
+            )
+
+        font_regular = "OrganicAmiri"
+        font_bold = "OrganicAmiri"
+
+        if os.path.isfile(amiri_bold_path):
+            if "OrganicAmiriBold" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(
+                    TTFont("OrganicAmiriBold", amiri_bold_path)
+                )
+            font_bold = "OrganicAmiriBold"
 
         filename = (
             "Organic_Juices_Qayma_"
-            + datetime.now().strftime("%Y%m%d_%H%M")
+            + datetime.now().strftime("%Y%m%d_%H%M%S")
             + ".pdf"
         )
 
@@ -2383,12 +2376,14 @@ def download_pdf():
         )
 
         styles = getSampleStyleSheet()
+
+        # ALL PDF text styles use Amiri.
         brand_style = ParagraphStyle(
             "OrganicBrand",
             parent=styles["Normal"],
-            fontName="Helvetica-Bold",
+            fontName=font_bold,
             fontSize=23,
-            leading=26,
+            leading=27,
             alignment=TA_CENTER,
             textColor=colors.HexColor("#151515"),
             spaceAfter=1
@@ -2396,9 +2391,9 @@ def download_pdf():
         subtitle_style = ParagraphStyle(
             "OrganicSubtitle",
             parent=styles["Normal"],
-            fontName="Helvetica",
+            fontName=font_regular,
             fontSize=8.5,
-            leading=10,
+            leading=11,
             alignment=TA_CENTER,
             textColor=colors.HexColor("#4d6f58")
         )
@@ -2407,7 +2402,7 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=9.5,
-            leading=12,
+            leading=13,
             alignment=TA_CENTER,
             textColor=colors.black
         )
@@ -2416,7 +2411,7 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=18,
-            leading=21,
+            leading=22,
             alignment=TA_CENTER,
             textColor=colors.black
         )
@@ -2425,7 +2420,7 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=13,
-            leading=16,
+            leading=17,
             alignment=TA_CENTER,
             textColor=colors.black
         )
@@ -2434,7 +2429,7 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=10.5,
-            leading=13,
+            leading=14,
             alignment=TA_CENTER,
             textColor=colors.black
         )
@@ -2443,7 +2438,7 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=10,
-            leading=13,
+            leading=14,
             alignment=TA_CENTER,
             textColor=colors.black
         )
@@ -2452,7 +2447,7 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_regular,
             fontSize=9,
-            leading=12,
+            leading=13,
             alignment=TA_CENTER,
             textColor=colors.black
         )
@@ -2461,12 +2456,13 @@ def download_pdf():
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=9,
-            leading=11,
+            leading=12,
             alignment=TA_CENTER,
             textColor=colors.black
         )
 
         def arabic_unit(unit):
+            """Display stored units in Arabic in the PDF."""
             u = str(unit or "").strip().lower()
             mapping = {
                 "دانە": "قطعة", "دانه": "قطعة", "دانة": "قطعة",
@@ -2486,11 +2482,7 @@ def download_pdf():
             except Exception:
                 return str(value)
 
-        # -------------------------------------------------
-        # IMPORTANT: PDF contains ONLY the items that were
-        # actually added/requested in the current Qayma.
-        # Settings-only items are never shown here.
-        # -------------------------------------------------
+        # Only items actually requested/added to this Qayma are printed.
         grouped = {
             "مەعمەل": [],
             "مەغزەن": [],
@@ -2502,8 +2494,8 @@ def download_pdf():
 
         story = []
 
-        # Clean white page + simple company header.
-        logo_path = os.path.join(os.getcwd(), "logo.png")
+        # Logo/header.
+        logo_path = os.path.join(base_dir, "logo.png")
         if os.path.exists(logo_path):
             try:
                 logo = Image(logo_path, width=58, height=58)
@@ -2517,8 +2509,11 @@ def download_pdf():
         story.append(Paragraph(pdf_text("100% Natural"), subtitle_style))
         story.append(Spacer(1, 10))
 
-        # Simple Qayma title band.
-        title_box = Table([[Paragraph(pdf_text("قایمە"), title_style)]], colWidths=[doc.width], rowHeights=[34])
+        title_box = Table(
+            [[Paragraph(pdf_text("قایمە"), title_style)]],
+            colWidths=[doc.width],
+            rowHeights=[34]
+        )
         title_box.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#e8f0e9")),
             ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c9d8cc")),
@@ -2530,11 +2525,14 @@ def download_pdf():
         story.append(title_box)
         story.append(Spacer(1, 9))
 
-        # Date / location / phone, kept compact and simple.
+        # Every text value in these cells is reshaped + bidi processed.
         info_data = [[
             Paragraph(pdf_text("شوێن: " + str(location)), info_style),
             Paragraph(pdf_text("مۆبایل: " + str(phone)), info_style),
-            Paragraph(pdf_text("بەروار: " + datetime.now().strftime("%Y / %m / %d")), info_style)
+            Paragraph(
+                pdf_text("بەروار: " + datetime.now().strftime("%Y / %m / %d")),
+                info_style
+            )
         ]]
         info = Table(info_data, colWidths=[doc.width / 3] * 3)
         info.setStyle(TableStyle([
@@ -2549,15 +2547,20 @@ def download_pdf():
         story.append(Spacer(1, 12))
 
         if note:
-            story.append(Paragraph(pdf_text("تێبینی: " + str(note)), note_style))
+            story.append(
+                Paragraph(pdf_text("تێبینی: " + str(note)), note_style)
+            )
             story.append(Spacer(1, 8))
 
         def make_category_table(title, rows):
-            # Never create an empty category. Only requested/added rows appear.
             if not rows:
                 return None
 
-            section = Table([[Paragraph(pdf_text(title), section_style)]], colWidths=[doc.width], rowHeights=[28])
+            section = Table(
+                [[Paragraph(pdf_text(title), section_style)]],
+                colWidths=[doc.width],
+                rowHeights=[28]
+            )
             section.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#edf4ee")),
                 ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c8d7ca")),
@@ -2565,20 +2568,29 @@ def download_pdf():
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ]))
 
+            # IMPORTANT: every table cell is a Paragraph using Amiri.
             data = [[
                 Paragraph(pdf_text("عدد"), head_style),
                 Paragraph(pdf_text("مادة"), head_style),
                 Paragraph(pdf_text("وحدة"), head_style)
             ]]
+
             for row in rows:
                 qty = "" if row["quantity"] == "" else fmt_qty(row["quantity"])
+                item_name = "" if row["item_name"] is None else str(row["item_name"])
+                unit_name = arabic_unit(row["unit"])
+
                 data.append([
                     Paragraph(pdf_text(qty), cell_style),
-                    Paragraph(pdf_text(row["item_name"]), cell_style),
-                    Paragraph(pdf_text(arabic_unit(row["unit"])), cell_style)
+                    Paragraph(pdf_text(item_name), cell_style),
+                    Paragraph(pdf_text(unit_name), cell_style)
                 ])
 
-            tbl = Table(data, colWidths=[doc.width * 0.18, doc.width * 0.58, doc.width * 0.24], repeatRows=1)
+            tbl = Table(
+                data,
+                colWidths=[doc.width * 0.18, doc.width * 0.58, doc.width * 0.24],
+                repeatRows=1
+            )
             tbl.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f5f1")),
                 ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#b8c4ba")),
@@ -2592,7 +2604,6 @@ def download_pdf():
             ]))
             return [section, Spacer(1, 3), tbl, Spacer(1, 10)]
 
-        # Only non-empty requested categories are printed.
         for title, key in [
             ("مواد معمل", "مەعمەل"),
             ("مواد مخزن", "مەغزەن"),
@@ -2602,8 +2613,9 @@ def download_pdf():
             if block:
                 story.extend(block)
 
-        total_items = len(orders)
-        story.append(Paragraph(pdf_text("کۆی بابەتەکان: " + str(total_items)), footer_style))
+        story.append(
+            Paragraph(pdf_text("کۆی بابەتەکان: " + str(len(orders))), footer_style)
+        )
 
         # Very light logo watermark behind the content.
         def draw_watermark(canvas, doc_obj):
@@ -2618,16 +2630,28 @@ def download_pdf():
                     y = (A4[1] - target_h) / 2 - 10
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(0.045)
-                    canvas.drawImage(img, x, y, width=target_w, height=target_h,
-                                     mask="auto", preserveAspectRatio=True)
+                    canvas.drawImage(
+                        img,
+                        x,
+                        y,
+                        width=target_w,
+                        height=target_h,
+                        mask="auto",
+                        preserveAspectRatio=True
+                    )
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(1)
             except Exception:
                 pass
             canvas.restoreState()
 
-        doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+        doc.build(
+            story,
+            onFirstPage=draw_watermark,
+            onLaterPages=draw_watermark
+        )
         return send_file(filename, as_attachment=True)
 
     except Exception as e:
         return "PDF Error: " + str(e), 500
+
