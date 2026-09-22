@@ -2292,6 +2292,33 @@ def download_pdf():
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.utils import ImageReader
 
+        # Arabic/Kurdish shaping and right-to-left display are REQUIRED
+        # before sending any Arabic/Kurdish text to ReportLab Paragraph.
+        # This prevents disconnected/reversed characters in the generated PDF.
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+        except ImportError as exc:
+            raise RuntimeError(
+                "Arabic PDF support requires 'arabic-reshaper' and 'python-bidi'. "
+                "Install them with: pip install arabic-reshaper python-bidi"
+            ) from exc
+
+        from xml.sax.saxutils import escape as xml_escape
+
+        def pdf_text(value):
+            """Prepare every text value for ReportLab Paragraph.
+
+            arabic_reshaper joins Arabic/Kurdish glyphs correctly and
+            python-bidi converts logical RTL text to the visual order
+            expected by ReportLab. XML escaping is applied afterwards so
+            user-entered names/notes cannot break Paragraph markup.
+            """
+            text = "" if value is None else str(value)
+            reshaped = arabic_reshaper.reshape(text)
+            visual = get_display(reshaped)
+            return xml_escape(visual)
+
         device_id = get_device_id()
         orders = get_orders(device_id)
         note = get_note(device_id)
@@ -2304,28 +2331,39 @@ def download_pdf():
         # -------------------------------------------------
         font_regular = "Helvetica"
         font_bold = "Helvetica-Bold"
+
+        # Prefer Amiri for Arabic/Kurdish. Look in the project first, then
+        # common Linux font locations. Register regular and bold separately
+        # so the PDF still works if only one face is available.
+        base_dir = os.path.dirname(os.path.abspath(__file__))
         font_candidates = [
-            ("OrganicAmiri", "OrganicAmiriBold", 
-             os.path.join(os.getcwd(), "Amiri", "Amiri-Regular.ttf"),
-             os.path.join(os.getcwd(), "Amiri", "Amiri-Bold.ttf")),
-            ("OrganicAmiri", "OrganicAmiriBold",
-             os.path.join(os.getcwd(), "Amiri-Regular.ttf"),
-             os.path.join(os.getcwd(), "Amiri-Bold.ttf")),
-            ("OrganicAmiri", "OrganicAmiriBold",
-             "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",
-             "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Bold.ttf"),
+            (
+                os.path.join(base_dir, "Amiri", "Amiri-Regular.ttf"),
+                os.path.join(base_dir, "Amiri", "Amiri-Bold.ttf"),
+            ),
+            (
+                os.path.join(base_dir, "Amiri-Regular.ttf"),
+                os.path.join(base_dir, "Amiri-Bold.ttf"),
+            ),
+            (
+                "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",
+                "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Bold.ttf",
+            ),
         ]
 
-        for regular_name, bold_name, regular_path, bold_path in font_candidates:
-            if os.path.exists(regular_path) and os.path.exists(bold_path):
-                try:
-                    pdfmetrics.registerFont(TTFont(regular_name, regular_path))
-                    pdfmetrics.registerFont(TTFont(bold_name, bold_path))
-                    font_regular = regular_name
-                    font_bold = bold_name
+        for regular_path, bold_path in font_candidates:
+            try:
+                if os.path.exists(regular_path):
+                    pdfmetrics.registerFont(TTFont("OrganicAmiri", regular_path))
+                    font_regular = "OrganicAmiri"
+                if os.path.exists(bold_path):
+                    pdfmetrics.registerFont(TTFont("OrganicAmiriBold", bold_path))
+                    font_bold = "OrganicAmiriBold"
+                if font_regular == "OrganicAmiri":
                     break
-                except Exception:
-                    pass
+            except Exception:
+                font_regular = "Helvetica"
+                font_bold = "Helvetica-Bold"
 
         filename = (
             "Organic_Juices_Qayma_"
@@ -2475,12 +2513,12 @@ def download_pdf():
             except Exception:
                 pass
 
-        story.append(Paragraph("ORGANIC JUICES", brand_style))
-        story.append(Paragraph("100% Natural", subtitle_style))
+        story.append(Paragraph(pdf_text("ORGANIC JUICES"), brand_style))
+        story.append(Paragraph(pdf_text("100% Natural"), subtitle_style))
         story.append(Spacer(1, 10))
 
         # Simple Qayma title band.
-        title_box = Table([[Paragraph("قایمە", title_style)]], colWidths=[doc.width], rowHeights=[34])
+        title_box = Table([[Paragraph(pdf_text("قایمە"), title_style)]], colWidths=[doc.width], rowHeights=[34])
         title_box.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#e8f0e9")),
             ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c9d8cc")),
@@ -2494,9 +2532,9 @@ def download_pdf():
 
         # Date / location / phone, kept compact and simple.
         info_data = [[
-            Paragraph("شوێن: " + str(location), info_style),
-            Paragraph("مۆبایل: " + str(phone), info_style),
-            Paragraph("بەروار: " + datetime.now().strftime("%Y / %m / %d"), info_style)
+            Paragraph(pdf_text("شوێن: " + str(location)), info_style),
+            Paragraph(pdf_text("مۆبایل: " + str(phone)), info_style),
+            Paragraph(pdf_text("بەروار: " + datetime.now().strftime("%Y / %m / %d")), info_style)
         ]]
         info = Table(info_data, colWidths=[doc.width / 3] * 3)
         info.setStyle(TableStyle([
@@ -2511,7 +2549,7 @@ def download_pdf():
         story.append(Spacer(1, 12))
 
         if note:
-            story.append(Paragraph("تێبینی: " + str(note), note_style))
+            story.append(Paragraph(pdf_text("تێبینی: " + str(note)), note_style))
             story.append(Spacer(1, 8))
 
         def make_category_table(title, rows):
@@ -2519,7 +2557,7 @@ def download_pdf():
             if not rows:
                 return None
 
-            section = Table([[Paragraph(str(title), section_style)]], colWidths=[doc.width], rowHeights=[28])
+            section = Table([[Paragraph(pdf_text(title), section_style)]], colWidths=[doc.width], rowHeights=[28])
             section.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#edf4ee")),
                 ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c8d7ca")),
@@ -2528,16 +2566,16 @@ def download_pdf():
             ]))
 
             data = [[
-                Paragraph("عدد", head_style),
-                Paragraph("مادة", head_style),
-                Paragraph("وحدة", head_style)
+                Paragraph(pdf_text("عدد"), head_style),
+                Paragraph(pdf_text("مادة"), head_style),
+                Paragraph(pdf_text("وحدة"), head_style)
             ]]
             for row in rows:
                 qty = "" if row["quantity"] == "" else fmt_qty(row["quantity"])
                 data.append([
-                    Paragraph(qty, cell_style),
-                    Paragraph(str(row["item_name"]), cell_style),
-                    Paragraph(arabic_unit(row["unit"]), cell_style)
+                    Paragraph(pdf_text(qty), cell_style),
+                    Paragraph(pdf_text(row["item_name"]), cell_style),
+                    Paragraph(pdf_text(arabic_unit(row["unit"])), cell_style)
                 ])
 
             tbl = Table(data, colWidths=[doc.width * 0.18, doc.width * 0.58, doc.width * 0.24], repeatRows=1)
@@ -2565,7 +2603,7 @@ def download_pdf():
                 story.extend(block)
 
         total_items = len(orders)
-        story.append(Paragraph("کۆی بابەتەکان: " + str(total_items), footer_style))
+        story.append(Paragraph(pdf_text("کۆی بابەتەکان: " + str(total_items)), footer_style))
 
         # Very light logo watermark behind the content.
         def draw_watermark(canvas, doc_obj):
