@@ -2286,10 +2286,8 @@ def download_pdf():
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-        from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-        )
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.utils import ImageReader
@@ -2300,27 +2298,35 @@ def download_pdf():
         location, phone = get_company_info()
 
         # -------------------------------------------------
-        # Font
+        # Professional Arabic/Kurdish font.
+        # Amiri has clear, readable Arabic glyphs and a bold
+        # face so important text stays black and strong.
         # -------------------------------------------------
-        font_name = "Helvetica"
+        font_regular = "Helvetica"
+        font_bold = "Helvetica-Bold"
         font_candidates = [
-            os.path.join(os.getcwd(), "Amiri", "Amiri-Regular.ttf"),
-            os.path.join(os.getcwd(), "Amiri-Regular.ttf"),
-            "C:\\Windows\\Fonts\\arial.ttf"
+            ("OrganicAmiri", "OrganicAmiriBold", 
+             os.path.join(os.getcwd(), "Amiri", "Amiri-Regular.ttf"),
+             os.path.join(os.getcwd(), "Amiri", "Amiri-Bold.ttf")),
+            ("OrganicAmiri", "OrganicAmiriBold",
+             os.path.join(os.getcwd(), "Amiri-Regular.ttf"),
+             os.path.join(os.getcwd(), "Amiri-Bold.ttf")),
+            ("OrganicAmiri", "OrganicAmiriBold",
+             "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",
+             "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Bold.ttf"),
         ]
 
-        for path in font_candidates:
-            if os.path.exists(path):
+        for regular_name, bold_name, regular_path, bold_path in font_candidates:
+            if os.path.exists(regular_path) and os.path.exists(bold_path):
                 try:
-                    pdfmetrics.registerFont(TTFont("OrganicArabic", path))
-                    font_name = "OrganicArabic"
+                    pdfmetrics.registerFont(TTFont(regular_name, regular_path))
+                    pdfmetrics.registerFont(TTFont(bold_name, bold_path))
+                    font_regular = regular_name
+                    font_bold = bold_name
                     break
                 except Exception:
                     pass
 
-        # -------------------------------------------------
-        # PDF document
-        # -------------------------------------------------
         filename = (
             "Organic_Juices_Qayma_"
             + datetime.now().strftime("%Y%m%d_%H%M")
@@ -2330,72 +2336,106 @@ def download_pdf():
         doc = SimpleDocTemplate(
             filename,
             pagesize=A4,
-            rightMargin=18,
-            leftMargin=18,
-            topMargin=18,
-            bottomMargin=18
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=25,
+            bottomMargin=25,
+            title="ORGANIC JUICES - Qayma",
+            author="ORGANIC JUICES"
         )
 
         styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            "QaymaTitle", parent=styles["Heading1"], fontName=font_name,
-            fontSize=22, leading=25, alignment=TA_CENTER,
-            textColor=colors.white, spaceAfter=0
-        )
         brand_style = ParagraphStyle(
-            "Brand", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=19, leading=21, alignment=TA_CENTER,
-            textColor=colors.white
+            "OrganicBrand",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=23,
+            leading=26,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#151515"),
+            spaceAfter=1
+        )
+        subtitle_style = ParagraphStyle(
+            "OrganicSubtitle",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=10,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#4d6f58")
         )
         info_style = ParagraphStyle(
-            "Info", parent=styles["Normal"], fontName=font_name,
-            fontSize=9.5, leading=12, alignment=TA_CENTER,
-            textColor=colors.HexColor("#202020")
+            "QaymaInfo",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=9.5,
+            leading=12,
+            alignment=TA_CENTER,
+            textColor=colors.black
+        )
+        title_style = ParagraphStyle(
+            "QaymaTitle",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=18,
+            leading=21,
+            alignment=TA_CENTER,
+            textColor=colors.black
         )
         section_style = ParagraphStyle(
-            "Section", parent=styles["Normal"], fontName=font_name,
-            fontSize=10.5, leading=12, alignment=TA_CENTER,
-            textColor=colors.white
+            "QaymaSection",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=13,
+            leading=16,
+            alignment=TA_CENTER,
+            textColor=colors.black
         )
         head_style = ParagraphStyle(
-            "TableHead", parent=styles["Normal"], fontName=font_name,
-            fontSize=8.5, leading=10, alignment=TA_CENTER,
-            textColor=colors.HexColor("#111111")
+            "QaymaHead",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=10.5,
+            leading=13,
+            alignment=TA_CENTER,
+            textColor=colors.black
         )
         cell_style = ParagraphStyle(
-            "Cell", parent=styles["Normal"], fontName=font_name,
-            fontSize=7.7, leading=9.2, alignment=TA_CENTER,
-            textColor=colors.HexColor("#111111")
+            "QaymaCell",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=10,
+            leading=13,
+            alignment=TA_CENTER,
+            textColor=colors.black
+        )
+        note_style = ParagraphStyle(
+            "QaymaNote",
+            parent=styles["Normal"],
+            fontName=font_regular,
+            fontSize=9,
+            leading=12,
+            alignment=TA_CENTER,
+            textColor=colors.black
         )
         footer_style = ParagraphStyle(
-            "Footer", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=9, leading=11, alignment=TA_CENTER,
-            textColor=colors.HexColor("#176b2c")
+            "QaymaFooter",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=9,
+            leading=11,
+            alignment=TA_CENTER,
+            textColor=colors.black
         )
 
-        # -------------------------------------------------
-        # Unit display: Arabic as requested
-        # -------------------------------------------------
         def arabic_unit(unit):
             u = str(unit or "").strip().lower()
             mapping = {
-                "دانە": "قطعة",
-                "دانه": "قطعة",
-                "دانة": "قطعة",
-                "کیلو": "كغم",
-                "كيلو": "كغم",
-                "کغم": "كغم",
-                "kg": "كغم",
-                "کارتۆن": "كارتون",
-                "كارتون": "كارتون",
-                "کارتن": "كارتون",
-                "لبان": "لبان",
-                "لیتر": "لتر",
-                "ليتر": "لتر",
-                "l": "لتر",
-                "بۆکس": "علبة",
-                "بوكس": "علبة",
-                "box": "علبة",
+                "دانە": "قطعة", "دانه": "قطعة", "دانة": "قطعة",
+                "کیلو": "كغم", "كيلو": "كغم", "کغم": "كغم", "kg": "كغم",
+                "کارتۆن": "كارتون", "كارتون": "كارتون", "کارتن": "كارتون",
+                "لیتر": "لتر", "ليتر": "لتر", "l": "لتر",
+                "بۆکس": "علبة", "بوكس": "علبة", "box": "علبة",
             }
             return mapping.get(u, str(unit))
 
@@ -2409,195 +2449,146 @@ def download_pdf():
                 return str(value)
 
         # -------------------------------------------------
-        # QAYMA / PDF: show ONLY items actually added by the user.
-        # Items saved in Settings but not added to the current Qayma
-        # must NOT appear as blank rows in the PDF.
+        # IMPORTANT: PDF contains ONLY the items that were
+        # actually added/requested in the current Qayma.
+        # Settings-only items are never shown here.
         # -------------------------------------------------
-        categories = {
+        grouped = {
             "مەعمەل": [],
             "مەغزەن": [],
             "فێقی": []
         }
-
         for order in orders:
             cat = str(order["category"])
-            if cat not in categories:
-                categories[cat] = []
-
-            categories[cat].append({
-                "name": order["item_name"],
-                "unit": order["unit"],
-                "quantity": order["quantity"]
-            })
+            grouped.setdefault(cat, []).append(order)
 
         story = []
 
-        # -------------------------------------------------
-        # Branded black header with logo
-        # -------------------------------------------------
+        # Clean white page + simple company header.
         logo_path = os.path.join(os.getcwd(), "logo.png")
-        header_cells = []
         if os.path.exists(logo_path):
             try:
-                logo_img = Image(logo_path, width=42, height=42)
-                header_cells.append(logo_img)
+                logo = Image(logo_path, width=58, height=58)
+                logo.hAlign = "CENTER"
+                story.append(logo)
+                story.append(Spacer(1, 3))
             except Exception:
-                header_cells.append("")
-        else:
-            header_cells.append("")
+                pass
 
-        header_cells.append(
-            Paragraph("ORGANIC JUSTICE S", brand_style)
-        )
+        story.append(Paragraph("ORGANIC JUICES", brand_style))
+        story.append(Paragraph("100% Natural", subtitle_style))
+        story.append(Spacer(1, 10))
 
-        if os.path.exists(logo_path):
-            try:
-                logo_img2 = Image(logo_path, width=42, height=42)
-                header_cells.append(logo_img2)
-            except Exception:
-                header_cells.append("")
-        else:
-            header_cells.append("")
-
-        header = Table([header_cells], colWidths=[55, 467, 55], rowHeights=[52])
-        header.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.black),
+        # Simple Qayma title band.
+        title_box = Table([[Paragraph("قایمە", title_style)]], colWidths=[doc.width], rowHeights=[34])
+        title_box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#e8f0e9")),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c9d8cc")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOX", (0, 0), (-1, -1), 1, colors.black),
-            ("LEFTPADDING", (0, 0), (-1, -1), 5),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ]))
-        story.append(header)
-        story.append(Spacer(1, 7))
+        story.append(title_box)
+        story.append(Spacer(1, 9))
 
-        info = Table([
-            [
-                Paragraph("<b>ناڤی قایمە: صالح یوسف</b>", info_style),
-                Paragraph("<b>بەروار: " + datetime.now().strftime("%Y / %m / %d") + "</b>", info_style)
-            ],
-            [
-                Paragraph("<b>شوێن: " + str(location) + "</b>", info_style),
-                Paragraph("<b>مۆبایل: " + str(phone) + "</b>", info_style)
-            ]
-        ], colWidths=[289, 288])
+        # Date / location / phone, kept compact and simple.
+        info_data = [[
+            Paragraph("شوێن: " + str(location), info_style),
+            Paragraph("مۆبایل: " + str(phone), info_style),
+            Paragraph("بەروار: " + datetime.now().strftime("%Y / %m / %d"), info_style)
+        ]]
+        info = Table(info_data, colWidths=[doc.width / 3] * 3)
         info.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#222222")),
-            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#aaaaaa")),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.45, colors.HexColor("#d6d6d6")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("TOPPADDING", (0, 0), (-1, -1), 5),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
         story.append(info)
-        story.append(Spacer(1, 9))
+        story.append(Spacer(1, 12))
 
         if note:
-            story.append(Paragraph("تێبینی: " + str(note), info_style))
-            story.append(Spacer(1, 6))
+            story.append(Paragraph("تێبینی: " + str(note), note_style))
+            story.append(Spacer(1, 8))
 
-        # -------------------------------------------------
-        # Three category tables: Kurdish section names,
-        # Arabic column headings and Arabic units.
-        # -------------------------------------------------
         def make_category_table(title, rows):
-            data = [[
-                Paragraph("<b>" + str(title) + "</b>", section_style),
-                "",
-                ""
-            ], [
-                Paragraph("<b>عدد</b>", head_style),
-                Paragraph("<b>مادة</b>", head_style),
-                Paragraph("<b>وحدة</b>", head_style)
-            ]]
+            # Never create an empty category. Only requested/added rows appear.
+            if not rows:
+                return None
 
+            section = Table([[Paragraph(str(title), section_style)]], colWidths=[doc.width], rowHeights=[28])
+            section.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#edf4ee")),
+                ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c8d7ca")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ]))
+
+            data = [[
+                Paragraph("عدد", head_style),
+                Paragraph("مادة", head_style),
+                Paragraph("وحدة", head_style)
+            ]]
             for row in rows:
                 qty = "" if row["quantity"] == "" else fmt_qty(row["quantity"])
                 data.append([
-                    Paragraph("<b>" + str(qty) + "</b>", cell_style),
-                    Paragraph(str(row["name"]), cell_style),
+                    Paragraph(qty, cell_style),
+                    Paragraph(str(row["item_name"]), cell_style),
                     Paragraph(arabic_unit(row["unit"]), cell_style)
                 ])
 
-            if not rows:
-                data.append([
-                    Paragraph("", cell_style),
-                    Paragraph("هیچ بابەتێک نییە", cell_style),
-                    Paragraph("", cell_style)
-                ])
-
-            tbl = Table(data, colWidths=[38, 104, 38], repeatRows=2)
+            tbl = Table(data, colWidths=[doc.width * 0.18, doc.width * 0.58, doc.width * 0.24], repeatRows=1)
             tbl.setStyle(TableStyle([
-                ("SPAN", (0, 0), (-1, 0)),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.black),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#eeeeee")),
-                ("GRID", (0, 0), (-1, -1), 0.55, colors.HexColor("#777777")),
-                ("BOX", (0, 0), (-1, -1), 1.0, colors.black),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f5f1")),
+                ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#b8c4ba")),
+                ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#9cab9e")),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("TOPPADDING", (0, 0), (-1, -1), 3.2),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3.2),
-                ("LEFTPADDING", (0, 0), (-1, -1), 2),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
             ]))
-            return tbl
+            return [section, Spacer(1, 3), tbl, Spacer(1, 10)]
 
-        # Order is intentionally: laboratory, storage, fruits.
-        table_lab = make_category_table("مواد معمل", categories.get("مەعمەل", []))
-        table_store = make_category_table("مواد مخزن", categories.get("مەغزەن", []))
-        table_fruits = make_category_table("فێقی", categories.get("فێقی", []))
+        # Only non-empty requested categories are printed.
+        for title, key in [
+            ("مواد معمل", "مەعمەل"),
+            ("مواد مخزن", "مەغزەن"),
+            ("فێقی", "فێقی")
+        ]:
+            block = make_category_table(title, grouped.get(key, []))
+            if block:
+                story.extend(block)
 
-        tables_row = Table(
-            [[table_lab, table_store, table_fruits]],
-            colWidths=[180, 180, 180]
-        )
-        tables_row.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 2),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        story.append(tables_row)
-        story.append(Spacer(1, 8))
-
-        total_items = sum(len(v) for v in categories.values())
+        total_items = len(orders)
         story.append(Paragraph("کۆی بابەتەکان: " + str(total_items), footer_style))
 
-        # -------------------------------------------------
-        # Large, faint logo watermark behind the page
-        # -------------------------------------------------
+        # Very light logo watermark behind the content.
         def draw_watermark(canvas, doc_obj):
             canvas.saveState()
             try:
                 if os.path.exists(logo_path):
                     img = ImageReader(logo_path)
                     iw, ih = img.getSize()
-                    target_w = 330
-                    target_h = target_w * ih / float(iw) if iw else 330
+                    target_w = 260
+                    target_h = target_w * ih / float(iw) if iw else 260
                     x = (A4[0] - target_w) / 2
-                    y = (A4[1] - target_h) / 2 - 30
+                    y = (A4[1] - target_h) / 2 - 10
                     if hasattr(canvas, "setFillAlpha"):
-                        canvas.setFillAlpha(0.055)
-                    canvas.drawImage(
-                        img, x, y,
-                        width=target_w, height=target_h,
-                        mask="auto", preserveAspectRatio=True
-                    )
+                        canvas.setFillAlpha(0.045)
+                    canvas.drawImage(img, x, y, width=target_w, height=target_h,
+                                     mask="auto", preserveAspectRatio=True)
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(1)
             except Exception:
                 pass
             canvas.restoreState()
 
-        doc.build(
-            story,
-            onFirstPage=draw_watermark,
-            onLaterPages=draw_watermark
-        )
-
+        doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
         return send_file(filename, as_attachment=True)
 
     except Exception as e:
