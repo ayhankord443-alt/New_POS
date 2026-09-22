@@ -2409,59 +2409,26 @@ def download_pdf():
                 return str(value)
 
         # -------------------------------------------------
-        # Build complete item lists, then place current qty
-        # on matching items. This keeps blank items visible.
+        # QAYMA / PDF: show ONLY items actually added by the user.
+        # Items saved in Settings but not added to the current Qayma
+        # must NOT appear as blank rows in the PDF.
         # -------------------------------------------------
-        conn = get_db()
-        item_rows = conn.execute("""
-            SELECT category, item_name, unit
-            FROM items
-            ORDER BY id ASC
-        """).fetchall()
-        conn.close()
-
-        qty_map = {}
-        for order in orders:
-            key = (str(order["category"]), str(order["item_name"]))
-            qty_map[key] = {
-                "quantity": order["quantity"],
-                "unit": order["unit"]
-            }
-
         categories = {
             "مەعمەل": [],
             "مەغزەن": [],
             "فێقی": []
         }
 
-        for row in item_rows:
-            cat = str(row["category"])
+        for order in orders:
+            cat = str(order["category"])
             if cat not in categories:
                 categories[cat] = []
-            key = (cat, str(row["item_name"]))
-            q = qty_map.get(key)
-            categories[cat].append({
-                "name": row["item_name"],
-                "unit": q["unit"] if q else row["unit"],
-                "quantity": q["quantity"] if q else ""
-            })
 
-        # If an order exists for an item that is no longer in items,
-        # still show it in its category.
-        existing_keys = {
-            (str(r["category"]), str(r["item_name"])) for r in item_rows
-        }
-        for order in orders:
-            key = (str(order["category"]), str(order["item_name"]))
-            if key not in existing_keys:
-                cat = str(order["category"])
-                if cat not in categories:
-                    categories[cat] = []
-                categories[cat].append({
-                    "name": order["item_name"],
-                    "unit": order["unit"],
-                    "quantity": order["quantity"]
-                })
+            categories[cat].append({
+                "name": order["item_name"],
+                "unit": order["unit"],
+                "quantity": order["quantity"]
+            })
 
         story = []
 
@@ -2506,12 +2473,12 @@ def download_pdf():
 
         info = Table([
             [
-                Paragraph("ناڤی قایمە: صالح یوسف", info_style),
-                Paragraph("بەروار: " + datetime.now().strftime("%Y / %m / %d"), info_style)
+                Paragraph("<b>ناڤی قایمە: صالح یوسف</b>", info_style),
+                Paragraph("<b>بەروار: " + datetime.now().strftime("%Y / %m / %d") + "</b>", info_style)
             ],
             [
-                Paragraph("شوێن: " + str(location), info_style),
-                Paragraph("مۆبایل: " + str(phone), info_style)
+                Paragraph("<b>شوێن: " + str(location) + "</b>", info_style),
+                Paragraph("<b>مۆبایل: " + str(phone) + "</b>", info_style)
             ]
         ], colWidths=[289, 288])
         info.setStyle(TableStyle([
@@ -2535,19 +2502,19 @@ def download_pdf():
         # -------------------------------------------------
         def make_category_table(title, rows):
             data = [[
-                Paragraph(title, section_style),
+                Paragraph("<b>" + str(title) + "</b>", section_style),
                 "",
                 ""
             ], [
-                Paragraph("عدد", head_style),
-                Paragraph("مادة", head_style),
-                Paragraph("وحدة", head_style)
+                Paragraph("<b>عدد</b>", head_style),
+                Paragraph("<b>مادة</b>", head_style),
+                Paragraph("<b>وحدة</b>", head_style)
             ]]
 
             for row in rows:
                 qty = "" if row["quantity"] == "" else fmt_qty(row["quantity"])
                 data.append([
-                    Paragraph(qty, cell_style),
+                    Paragraph("<b>" + str(qty) + "</b>", cell_style),
                     Paragraph(str(row["name"]), cell_style),
                     Paragraph(arabic_unit(row["unit"]), cell_style)
                 ])
