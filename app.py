@@ -2289,7 +2289,7 @@ def download_pdf():
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
         from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
         )
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
@@ -2374,8 +2374,8 @@ def download_pdf():
             "OrganicBrandLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=20,
-            leading=22,
+            fontSize=22,
+            leading=24,
             alignment=TA_CENTER,
             textColor=colors.black,
             spaceAfter=0,
@@ -2396,8 +2396,8 @@ def download_pdf():
             "QaymaTitleLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=14,
-            leading=16,
+            fontSize=15.5,
+            leading=18,
             alignment=TA_CENTER,
             textColor=colors.black,
             spaceAfter=0,
@@ -2418,8 +2418,8 @@ def download_pdf():
             "QaymaSectionLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=9.5,
-            leading=11,
+            fontSize=10.5,
+            leading=12.5,
             alignment=TA_CENTER,
             textColor=colors.black,
             spaceAfter=0,
@@ -2429,8 +2429,8 @@ def download_pdf():
             "QaymaHeadLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=8,
-            leading=9.5,
+            fontSize=8.5,
+            leading=10.5,
             alignment=TA_CENTER,
             textColor=colors.black,
             spaceAfter=0,
@@ -2440,8 +2440,8 @@ def download_pdf():
             "QaymaCellLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=7.5,
-            leading=9,
+            fontSize=8,
+            leading=9.5,
             alignment=TA_CENTER,
             textColor=colors.black,
             wordWrap="CJK",
@@ -2478,9 +2478,11 @@ def download_pdf():
         def arabic_unit(unit):
             u = str(unit or "").strip().lower()
             mapping = {
-                "دانە": "دانە",
-                "دانه": "دانە",
-                "دانة": "دانە",
+                "دانە": "قطعة",
+                "دانه": "قطعة",
+                "دانة": "قطعة",
+                "قطعة": "قطعة",
+                "قطعه": "قطعة",
                 "کیلو": "كێلو",
                 "كيلو": "كێلو",
                 "كێلو": "كێلو",
@@ -2609,8 +2611,8 @@ def download_pdf():
             for title, key, rows in non_empty:
                 data = [[
                     Paragraph(pdf_text("عدد"), head_style),
-                    Paragraph(pdf_text("مادة"), head_style),
-                    Paragraph(pdf_text("وحدة"), head_style),
+                    Paragraph(pdf_text("ماددە"), head_style),
+                    Paragraph(pdf_text("وحدە"), head_style),
                 ]]
 
                 for row in rows:
@@ -2665,17 +2667,20 @@ def download_pdf():
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]))
-            story.append(category_row)
-
-        story.append(Spacer(1, 4))
-        # Summary is a real Paragraph, shaped + bidi processed exactly like
-        # every other Arabic/Kurdish string.
-        story.append(
-            Paragraph(
+            # Keep the invoice tables and their summary together so the
+            # layout does not scatter across pages.
+            summary = Paragraph(
                 pdf_text("کۆی بابەتەکان: " + str(len(orders))),
                 footer_style,
             )
-        )
+            story.append(KeepTogether([category_row, Spacer(1, 3), summary]))
+        else:
+            story.append(
+                Paragraph(
+                    pdf_text("کۆی بابەتەکان: " + str(len(orders))),
+                    footer_style,
+                )
+            )
 
         # -----------------------------------------------------
         # Watermark: very light logo, centered behind the invoice.
