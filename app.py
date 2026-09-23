@@ -2283,21 +2283,19 @@ def download_pdf():
         return redirect(url_for("login"))
 
     try:
-        from reportlab.lib.pagesizes import A4
+        # ReportLab + RTL/Arabic/Kurdish support
+        from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+        )
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.utils import ImageReader
         from xml.sax.saxutils import escape as xml_escape
 
-        # =====================================================
-        # REQUIRED RTL SUPPORT
-        # Every Kurdish/Arabic string MUST pass through these
-        # two steps before it is given to ReportLab Paragraph.
-        # =====================================================
         try:
             import arabic_reshaper
             from bidi.algorithm import get_display
@@ -2307,18 +2305,17 @@ def download_pdf():
                 "python-bidi. Install with: pip install arabic-reshaper python-bidi"
             ) from exc
 
+        # -----------------------------------------------------
+        # RTL TEXT PIPELINE
+        # Every Arabic/Kurdish string MUST pass through this
+        # function before it reaches Paragraph/Table.
+        # -----------------------------------------------------
         def pdf_text(value):
-            """Convert logical Arabic/Kurdish text to shaped visual text.
-
-            Order is important:
-              1) arabic_reshaper.reshape() joins Arabic/Kurdish glyphs.
-              2) bidi.get_display() converts RTL logical order to the visual
-                 order ReportLab expects.
-              3) XML escaping protects Paragraph markup.
-            """
             text = "" if value is None else str(value)
-            reshaped = arabic_reshaper.reshape(text)
-            visual = get_display(reshaped, base_dir="R")
+            # Shape Arabic/Kurdish joining forms first, then apply
+            # the Unicode bidirectional algorithm for visual RTL order.
+            shaped = arabic_reshaper.reshape(text)
+            visual = get_display(shaped, base_dir="R")
             return xml_escape(visual)
 
         device_id = get_device_id()
@@ -2326,36 +2323,28 @@ def download_pdf():
         note = get_note(device_id)
         location, phone = get_company_info()
 
-        # =====================================================
-        # AMIRI FONT - REQUIRED, NO HELVETICA FALLBACK
-        # =====================================================
+        # -----------------------------------------------------
+        # AMIRI FONT - required for all PDF text
+        # -----------------------------------------------------
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        amiri_regular_path = os.path.join(
-            base_dir, "Amiri", "Amiri-Regular.ttf"
-        )
-        amiri_bold_path = os.path.join(
-            base_dir, "Amiri", "Amiri-Bold.ttf"
-        )
+        amiri_dir = os.path.join(base_dir, "Amiri")
+        amiri_regular_path = os.path.join(amiri_dir, "Amiri-Regular.ttf")
+        amiri_bold_path = os.path.join(amiri_dir, "Amiri-Bold.ttf")
 
         if not os.path.isfile(amiri_regular_path):
             raise FileNotFoundError(
-                "Amiri font not found: " + amiri_regular_path
+                "Amiri-Regular.ttf not found: " + amiri_regular_path
             )
 
-        # Register once so repeated PDF downloads do not re-register the font.
         if "OrganicAmiri" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(
-                TTFont("OrganicAmiri", amiri_regular_path)
-            )
+            pdfmetrics.registerFont(TTFont("OrganicAmiri", amiri_regular_path))
 
         font_regular = "OrganicAmiri"
         font_bold = "OrganicAmiri"
 
         if os.path.isfile(amiri_bold_path):
             if "OrganicAmiriBold" not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(
-                    TTFont("OrganicAmiriBold", amiri_bold_path)
-                )
+                pdfmetrics.registerFont(TTFont("OrganicAmiriBold", amiri_bold_path))
             font_bold = "OrganicAmiriBold"
 
         filename = (
@@ -2364,114 +2353,156 @@ def download_pdf():
             + ".pdf"
         )
 
+        page_size = landscape(A4)
         doc = SimpleDocTemplate(
             filename,
-            pagesize=A4,
-            rightMargin=30,
-            leftMargin=30,
-            topMargin=25,
-            bottomMargin=25,
+            pagesize=page_size,
+            rightMargin=18,
+            leftMargin=18,
+            topMargin=14,
+            bottomMargin=14,
             title="ORGANIC JUICES - Qayma",
-            author="ORGANIC JUICES"
+            author="ORGANIC JUICES",
+            allowSplitting=0,
         )
 
         styles = getSampleStyleSheet()
 
-        # ALL PDF text styles use Amiri.
+        # Compact styles are intentional: the invoice must stay together
+        # on one Landscape A4 page.
         brand_style = ParagraphStyle(
-            "OrganicBrand",
+            "OrganicBrandLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=23,
-            leading=27,
+            fontSize=20,
+            leading=22,
             alignment=TA_CENTER,
-            textColor=colors.HexColor("#151515"),
-            spaceAfter=1
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         subtitle_style = ParagraphStyle(
-            "OrganicSubtitle",
+            "OrganicSubtitleLandscape",
             parent=styles["Normal"],
             fontName=font_regular,
-            fontSize=8.5,
-            leading=11,
+            fontSize=7.5,
+            leading=9,
             alignment=TA_CENTER,
-            textColor=colors.HexColor("#4d6f58")
+            textColor=colors.HexColor("#4d6f58"),
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        title_style = ParagraphStyle(
+            "QaymaTitleLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=14,
+            leading=16,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         info_style = ParagraphStyle(
-            "QaymaInfo",
+            "QaymaInfoLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=8,
+            leading=10,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        section_style = ParagraphStyle(
+            "QaymaSectionLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=9.5,
-            leading=13,
+            leading=11,
             alignment=TA_CENTER,
-            textColor=colors.black
-        )
-        title_style = ParagraphStyle(
-            "QaymaTitle",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=18,
-            leading=22,
-            alignment=TA_CENTER,
-            textColor=colors.black
-        )
-        section_style = ParagraphStyle(
-            "QaymaSection",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=13,
-            leading=17,
-            alignment=TA_CENTER,
-            textColor=colors.black
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         head_style = ParagraphStyle(
-            "QaymaHead",
+            "QaymaHeadLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=10.5,
-            leading=14,
+            fontSize=8,
+            leading=9.5,
             alignment=TA_CENTER,
-            textColor=colors.black
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         cell_style = ParagraphStyle(
-            "QaymaCell",
+            "QaymaCellLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
-            fontSize=10,
-            leading=14,
+            fontSize=7.5,
+            leading=9,
             alignment=TA_CENTER,
-            textColor=colors.black
+            textColor=colors.black,
+            wordWrap="CJK",
+            spaceAfter=0,
+            spaceBefore=0,
         )
         note_style = ParagraphStyle(
-            "QaymaNote",
+            "QaymaNoteLandscape",
             parent=styles["Normal"],
             fontName=font_regular,
-            fontSize=9,
-            leading=13,
+            fontSize=7.5,
+            leading=9,
             alignment=TA_CENTER,
-            textColor=colors.black
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         footer_style = ParagraphStyle(
-            "QaymaFooter",
+            "QaymaFooterLandscape",
             parent=styles["Normal"],
             fontName=font_bold,
             fontSize=9,
-            leading=12,
+            leading=10,
             alignment=TA_CENTER,
-            textColor=colors.black
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
 
+        # -----------------------------------------------------
+        # Unit normalization for PDF display.
+        # The returned value is still passed through pdf_text().
+        # -----------------------------------------------------
         def arabic_unit(unit):
-            """Display stored units in Arabic in the PDF."""
             u = str(unit or "").strip().lower()
             mapping = {
-                "دانە": "قطعة", "دانه": "قطعة", "دانة": "قطعة",
-                "کیلو": "كغم", "كيلو": "كغم", "کغم": "كغم", "kg": "كغم",
-                "کارتۆن": "كارتون", "كارتون": "كارتون", "کارتن": "كارتون",
-                "لیتر": "لتر", "ليتر": "لتر", "l": "لتر",
-                "بۆکس": "علبة", "بوكس": "علبة", "box": "علبة",
+                "دانە": "دانە",
+                "دانه": "دانە",
+                "دانة": "دانە",
+                "کیلو": "كێلو",
+                "كيلو": "كێلو",
+                "كێلو": "كێلو",
+                "کێلو": "كێلو",
+                "کغم": "كێلو",
+                "كغم": "كێلو",
+                "kg": "كێلو",
+                "کارتۆن": "كارتۆن",
+                "كارتون": "كارتۆن",
+                "کارتن": "كارتۆن",
+                "carton": "كارتۆن",
+                "لیتر": "لتر",
+                "ليتر": "لتر",
+                "l": "لتر",
+                "liter": "لتر",
+                "litre": "لتر",
+                "بۆکس": "بۆکس",
+                "بوكس": "بۆکس",
+                "box": "بۆکس",
+                "لبان": "دانە",
             }
-            return mapping.get(u, str(unit))
+            return mapping.get(u, str(unit or ""))
 
         def fmt_qty(value):
             try:
@@ -2482,154 +2513,186 @@ def download_pdf():
             except Exception:
                 return str(value)
 
-        # Only items actually requested/added to this Qayma are printed.
-        grouped = {
-            "مەعمەل": [],
-            "مەغزەن": [],
-            "فێقی": []
-        }
+        # Only requested/added orders are printed.
+        grouped = {"مەعمەل": [], "مەغزەن": [], "فێقی": []}
         for order in orders:
             cat = str(order["category"])
             grouped.setdefault(cat, []).append(order)
 
         story = []
-
-        # Logo/header.
         logo_path = os.path.join(base_dir, "logo.png")
+
+        # -----------------------------------------------------
+        # Compact header: logo + ORGANIC JUICES + Qayma info.
+        # -----------------------------------------------------
+        logo_cell = ""
         if os.path.exists(logo_path):
             try:
-                logo = Image(logo_path, width=58, height=58)
-                logo.hAlign = "CENTER"
-                story.append(logo)
-                story.append(Spacer(1, 3))
+                logo_cell = Image(logo_path, width=48, height=48)
+                logo_cell.hAlign = "CENTER"
             except Exception:
-                pass
+                logo_cell = ""
 
-        story.append(Paragraph(pdf_text("ORGANIC JUICES"), brand_style))
-        story.append(Paragraph(pdf_text("100% Natural"), subtitle_style))
-        story.append(Spacer(1, 10))
-
-        title_box = Table(
-            [[Paragraph(pdf_text("قایمە"), title_style)]],
-            colWidths=[doc.width],
-            rowHeights=[34]
+        brand_block = [
+            Paragraph(pdf_text("ORGANIC JUICES"), brand_style),
+            Paragraph(pdf_text("100% Natural"), subtitle_style),
+            Spacer(1, 2),
+            Paragraph(pdf_text("قایمە"), title_style),
+        ]
+        header = Table(
+            [[logo_cell, brand_block, ""]],
+            colWidths=[62, doc.width - 124, 62],
+            rowHeights=[54],
         )
-        title_box.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#e8f0e9")),
-            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c9d8cc")),
+        header.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("BOX", (0, 0), (-1, -1), 0.55, colors.HexColor("#d8e2da")),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
-        story.append(title_box)
-        story.append(Spacer(1, 9))
+        story.append(header)
+        story.append(Spacer(1, 4))
 
-        # Every text value in these cells is reshaped + bidi processed.
         info_data = [[
             Paragraph(pdf_text("شوێن: " + str(location)), info_style),
             Paragraph(pdf_text("مۆبایل: " + str(phone)), info_style),
             Paragraph(
                 pdf_text("بەروار: " + datetime.now().strftime("%Y / %m / %d")),
-                info_style
-            )
+                info_style,
+            ),
         ]]
-        info = Table(info_data, colWidths=[doc.width / 3] * 3)
+        info = Table(info_data, colWidths=[doc.width / 3] * 3, rowHeights=[22])
         info.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-            ("LINEBELOW", (0, 0), (-1, -1), 0.45, colors.HexColor("#d6d6d6")),
+            ("BOX", (0, 0), (-1, -1), 0.45, colors.HexColor("#d6d6d6")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#e2e2e2")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
         story.append(info)
-        story.append(Spacer(1, 12))
 
         if note:
-            story.append(
-                Paragraph(pdf_text("تێبینی: " + str(note)), note_style)
-            )
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 3))
+            story.append(Paragraph(pdf_text("تێبینی: " + str(note)), note_style))
 
-        def make_category_table(title, rows):
-            if not rows:
-                return None
+        story.append(Spacer(1, 5))
 
-            section = Table(
-                [[Paragraph(pdf_text(title), section_style)]],
-                colWidths=[doc.width],
-                rowHeights=[28]
-            )
-            section.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#edf4ee")),
-                ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#c8d7ca")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ]))
-
-            # IMPORTANT: every table cell is a Paragraph using Amiri.
-            data = [[
-                Paragraph(pdf_text("عدد"), head_style),
-                Paragraph(pdf_text("مادة"), head_style),
-                Paragraph(pdf_text("وحدة"), head_style)
-            ]]
-
-            for row in rows:
-                qty = "" if row["quantity"] == "" else fmt_qty(row["quantity"])
-                item_name = "" if row["item_name"] is None else str(row["item_name"])
-                unit_name = arabic_unit(row["unit"])
-
-                data.append([
-                    Paragraph(pdf_text(qty), cell_style),
-                    Paragraph(pdf_text(item_name), cell_style),
-                    Paragraph(pdf_text(unit_name), cell_style)
-                ])
-
-            tbl = Table(
-                data,
-                colWidths=[doc.width * 0.18, doc.width * 0.58, doc.width * 0.24],
-                repeatRows=1
-            )
-            tbl.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f5f1")),
-                ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#b8c4ba")),
-                ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#9cab9e")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ]))
-            return [section, Spacer(1, 3), tbl, Spacer(1, 10)]
-
-        for title, key in [
+        # Only non-empty categories are included in the Qayma.
+        category_specs = [
             ("مواد معمل", "مەعمەل"),
             ("مواد مخزن", "مەغزەن"),
-            ("فێقی", "فێقی")
-        ]:
-            block = make_category_table(title, grouped.get(key, []))
-            if block:
-                story.extend(block)
+            ("فێقی", "فێقی"),
+        ]
+        non_empty = [
+            (title, key, grouped.get(key, []))
+            for title, key in category_specs
+            if grouped.get(key, [])
+        ]
 
+        # Put all non-empty categories side-by-side. This keeps the complete
+        # invoice compact and bound together on one Landscape A4 page.
+        if non_empty:
+            usable_w = doc.width
+            gap = 7
+            n = len(non_empty)
+            col_w = (usable_w - gap * (n - 1)) / n
+            cells = []
+
+            for title, key, rows in non_empty:
+                data = [[
+                    Paragraph(pdf_text("عدد"), head_style),
+                    Paragraph(pdf_text("مادة"), head_style),
+                    Paragraph(pdf_text("وحدة"), head_style),
+                ]]
+
+                for row in rows:
+                    data.append([
+                        Paragraph(pdf_text(fmt_qty(row.get("quantity", ""))), cell_style),
+                        Paragraph(pdf_text(str(row.get("item_name") or "")), cell_style),
+                        Paragraph(pdf_text(arabic_unit(row.get("unit"))), cell_style),
+                    ])
+
+                inner = Table(
+                    data,
+                    colWidths=[col_w * 0.20, col_w * 0.56, col_w * 0.24],
+                    repeatRows=1,
+                )
+                inner.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf4ee")),
+                    ("GRID", (0, 0), (-1, -1), 0.38, colors.HexColor("#aeb9b0")),
+                    ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#8e9b91")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2.0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2.0),
+                ]))
+
+                cell = Table(
+                    [[Paragraph(pdf_text(title), section_style)], [inner]],
+                    colWidths=[col_w],
+                )
+                cell.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f0e9")),
+                    ("BOX", (0, 0), (-1, -1), 0.65, colors.HexColor("#9cab9e")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+                ]))
+                cells.append(cell)
+
+            category_row = Table(
+                [cells],
+                colWidths=[col_w] * n,
+                hAlign="CENTER",
+            )
+            category_row.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), gap / 2),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            story.append(category_row)
+
+        story.append(Spacer(1, 4))
+        # Summary is a real Paragraph, shaped + bidi processed exactly like
+        # every other Arabic/Kurdish string.
         story.append(
-            Paragraph(pdf_text("کۆی بابەتەکان: " + str(len(orders))), footer_style)
+            Paragraph(
+                pdf_text("کۆی بابەتەکان: " + str(len(orders))),
+                footer_style,
+            )
         )
 
-        # Very light logo watermark behind the content.
+        # -----------------------------------------------------
+        # Watermark: very light logo, centered behind the invoice.
+        # -----------------------------------------------------
         def draw_watermark(canvas, doc_obj):
             canvas.saveState()
             try:
                 if os.path.exists(logo_path):
                     img = ImageReader(logo_path)
                     iw, ih = img.getSize()
-                    target_w = 260
-                    target_h = target_w * ih / float(iw) if iw else 260
-                    x = (A4[0] - target_w) / 2
-                    y = (A4[1] - target_h) / 2 - 10
+                    target_w = 300
+                    target_h = target_w * ih / float(iw) if iw else 300
+                    page_w, page_h = page_size
+                    x = (page_w - target_w) / 2
+                    y = (page_h - target_h) / 2 - 4
                     if hasattr(canvas, "setFillAlpha"):
-                        canvas.setFillAlpha(0.045)
+                        canvas.setFillAlpha(0.035)
                     canvas.drawImage(
                         img,
                         x,
@@ -2637,7 +2700,7 @@ def download_pdf():
                         width=target_w,
                         height=target_h,
                         mask="auto",
-                        preserveAspectRatio=True
+                        preserveAspectRatio=True,
                     )
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(1)
@@ -2648,8 +2711,9 @@ def download_pdf():
         doc.build(
             story,
             onFirstPage=draw_watermark,
-            onLaterPages=draw_watermark
+            onLaterPages=draw_watermark,
         )
+
         return send_file(filename, as_attachment=True)
 
     except Exception as e:
