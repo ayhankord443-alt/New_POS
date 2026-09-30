@@ -22,6 +22,135 @@ app.secret_key = os.environ.get(
 DB_NAME = "clean_qayma.db"
 SHARED_PASSWORD = os.environ.get("ORGANIC_PASSWORD", "organic123")
 
+# =========================================================
+# LANGUAGES
+# =========================================================
+LANGUAGE_CHOICES = {
+    "ku": "کوردی سۆرانی",
+    "ar": "العربية",
+    "en": "English",
+}
+
+LANG_TEXT = {
+    "ku": {
+        "settings": "سێتینگی سیستەم", "back": "گەڕانەوە", "add_item": "زیادکردنی بابەتی نوێ",
+        "section": "بەش", "item_name": "ناوی بابەت", "unit": "یەکە", "save": "پاشەکەوتکردن",
+        "all_items": "لیستی هەموو بابەتەکان", "actions": "کردار", "edit": "دەستکاریکردن", "delete": "سڕینەوە",
+        "language": "زمانی بەرنامە", "language_saved": "زمان بە سەرکەوتوویی گۆڕدرا",
+        "note": "تێبینی قایمە", "save_note": "تومارکردنی تێبینی", "search": "گەڕان بۆ بابەت...",
+        "download_pdf": "دروستکردنی PDF", "clear": "پاککردنەوەی قایمە", "logout": "چوونەدەرەوە",
+        "login_title": "سیستەمی قایمەی کۆمپانیا", "password": "ڕەمزی چوونەژوورەوە", "login": "چوونەژوورەوە",
+        "qayma": "قایمە", "location": "شوێن", "phone": "مۆبایل", "date": "بەروار",
+        "total": "کۆی بابەتەکان", "category_factory": "مواد معمل", "category_warehouse": "مواد مخزن",
+        "category_fiq": "فێقی", "qty": "عدد", "material": "ماددە", "unit_header": "وحدە",
+        "piece": "دانە", "kilo": "کیلۆ", "carton": "کارتۆن", "liter": "لیتر", "box": "بۆکس",
+    },
+    "ar": {
+        "settings": "إعدادات النظام", "back": "رجوع", "add_item": "إضافة مادة جديدة",
+        "section": "القسم", "item_name": "اسم المادة", "unit": "الوحدة", "save": "حفظ",
+        "all_items": "قائمة جميع المواد", "actions": "الإجراءات", "edit": "تعديل", "delete": "حذف",
+        "language": "لغة البرنامج", "language_saved": "تم تغيير اللغة بنجاح",
+        "note": "ملاحظة القائمة", "save_note": "حفظ الملاحظة", "search": "البحث عن مادة...",
+        "download_pdf": "إنشاء PDF", "clear": "مسح القائمة", "logout": "تسجيل الخروج",
+        "login_title": "نظام قائمة الشركة", "password": "كلمة المرور", "login": "تسجيل الدخول",
+        "qayma": "القائمة", "location": "الموقع", "phone": "الهاتف", "date": "التاريخ",
+        "total": "إجمالي المواد", "category_factory": "مواد معمل", "category_warehouse": "مواد مخزن",
+        "category_fiq": "الفواكه", "qty": "العدد", "material": "المادة", "unit_header": "الوحدة",
+        "piece": "قطعة", "kilo": "كغم", "carton": "كرتون", "liter": "لتر", "box": "علبة",
+    },
+    "en": {
+        "settings": "System Settings", "back": "Back", "add_item": "Add New Item",
+        "section": "Section", "item_name": "Item Name", "unit": "Unit", "save": "Save",
+        "all_items": "All Items", "actions": "Actions", "edit": "Edit", "delete": "Delete",
+        "language": "Application Language", "language_saved": "Language changed successfully",
+        "note": "Qayma Note", "save_note": "Save Note", "search": "Search items...",
+        "download_pdf": "Create PDF", "clear": "Clear Qayma", "logout": "Logout",
+        "login_title": "Company Qayma System", "password": "Password", "login": "Login",
+        "qayma": "Qayma", "location": "Location", "phone": "Phone", "date": "Date",
+        "total": "Total Items", "category_factory": "Factory Materials", "category_warehouse": "Warehouse Materials",
+        "category_fiq": "Fruits", "qty": "Quantity", "material": "Item", "unit_header": "Unit",
+        "piece": "Piece", "kilo": "Kilo", "carton": "Carton", "liter": "Liter", "box": "Box",
+    }
+}
+
+def get_language():
+    try:
+        conn = get_db()
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(company_info)").fetchall()]
+        if "language" in cols:
+            row = conn.execute("SELECT language FROM company_info WHERE id=1").fetchone()
+            conn.close()
+            lang = row["language"] if row and row["language"] in LANGUAGE_CHOICES else "ku"
+            return lang
+        conn.close()
+    except Exception:
+        pass
+    return "ku"
+
+def tr(key, lang=None):
+    lang = lang or get_language()
+    return LANG_TEXT.get(lang, LANG_TEXT["ku"]).get(key, LANG_TEXT["ku"].get(key, key))
+
+def language_direction(lang=None):
+    return "rtl" if (lang or get_language()) in ("ku", "ar") else "ltr"
+
+
+CATEGORY_TEXT = {
+    "ku": {"فێقی":"فێقی", "مەعمەل":"مواد معمل", "مەغزەن":"مواد مخزن"},
+    "ar": {"فێقی":"الفواكه", "مەعمەل":"مواد معمل", "مەغزەن":"مواد مخزن"},
+    "en": {"فێقی":"Fruits", "مەعمەل":"Factory Materials", "مەغزەن":"Warehouse Materials"},
+}
+
+def category_label(category, lang=None):
+    lang = lang or get_language()
+    return CATEGORY_TEXT.get(lang, CATEGORY_TEXT["ku"]).get(str(category), str(category))
+
+def localize_template(template, lang=None):
+    """Translate static UI labels while preserving Jinja variables and user data."""
+    lang = lang or get_language()
+    if lang == "ku":
+        return template
+    common = {
+        "سێتینگی سیستەم": {"ar":"إعدادات النظام","en":"System Settings"},
+        "گەڕانەوە": {"ar":"رجوع","en":"Back"},
+        "زیادکردنی بابەتی نوێ": {"ar":"إضافة مادة جديدة","en":"Add New Item"},
+        "ناوی بابەت": {"ar":"اسم المادة","en":"Item Name"},
+        "یەکە": {"ar":"الوحدة","en":"Unit"},
+        "تومارکردن": {"ar":"حفظ","en":"Save"},
+        "لیستی هەموو بابەتەکان": {"ar":"قائمة جميع المواد","en":"All Items"},
+        "کردار": {"ar":"الإجراءات","en":"Actions"},
+        "Edit": {"ar":"تعديل","en":"Edit"},
+        "Delete": {"ar":"حذف","en":"Delete"},
+        "سێتینگ": {"ar":"الإعدادات","en":"Settings"},
+        "گەڕان بۆ بابەت...": {"ar":"البحث عن مادة...","en":"Search items..."},
+        "تێبینی قایمە": {"ar":"ملاحظة القائمة","en":"Qayma Note"},
+        "تێبینی خۆت لێرە بنووسە...": {"ar":"اكتب ملاحظتك هنا...","en":"Write your note here..."},
+        "تومارکردنی تێبینی": {"ar":"حفظ الملاحظة","en":"Save Note"},
+        "دروستکردنی PDF": {"ar":"إنشاء PDF","en":"Create PDF"},
+        "پاککردنەوەی قایمە": {"ar":"مسح القائمة","en":"Clear Qayma"},
+        "چوونەدەرەوە": {"ar":"تسجيل الخروج","en":"Logout"},
+        "چوونەژوورەوە": {"ar":"تسجيل الدخول","en":"Login"},
+        "سیستەمی قایمەی کۆمپانیا": {"ar":"نظام قائمة الشركة","en":"Company Qayma System"},
+        "ڕەمزی چوونەژوورەوە": {"ar":"كلمة المرور","en":"Password"},
+        "دەستکاریکردنی بابەت": {"ar":"تعديل المادة","en":"Edit Item"},
+        "پاشەکەوتکردن": {"ar":"حفظ التغييرات","en":"Save Changes"},
+        "گەڕانەوە بۆ سێتینگ": {"ar":"الرجوع إلى الإعدادات","en":"Back to Settings"},
+        "کۆمپانییا ئۆرگانیک جویس": {"ar":"أورغانيك جوس","en":"ORGANIC JUICES"},
+        "بەش": {"ar":"القسم","en":"Section"},
+        "ناو": {"ar":"الاسم","en":"Name"},
+        "هەموو بابەتەکان": {"ar":"جميع المواد","en":"All Items"},
+        "پیتەکە": {"ar":"الوحدة","en":"Unit"},
+        "قایمە": {"ar":"القائمة","en":"Qayma"},
+        "شوێن": {"ar":"الموقع","en":"Location"},
+        "مۆبایل": {"ar":"الهاتف","en":"Phone"},
+        "بەروار": {"ar":"التاريخ","en":"Date"},
+    }
+    out = template
+    for src, vals in common.items():
+        out = out.replace(src, vals.get(lang, src))
+    return out
+
+
 
 # =========================================================
 # DATABASE
@@ -85,6 +214,11 @@ def init_db():
         INSERT OR IGNORE INTO company_info (id, location, phone)
         VALUES (1, 'پارکا شەهیدا', '07500113334')
     """)
+
+    # Language setting (shared by the application and PDF).
+    cols = [r[1] for r in c.execute("PRAGMA table_info(company_info)").fetchall()]
+    if "language" not in cols:
+        c.execute("ALTER TABLE company_info ADD COLUMN language TEXT NOT NULL DEFAULT 'ku'")
 
     # -----------------------------------------------------
     # Categories
@@ -320,7 +454,7 @@ def get_all_items():
 LOGIN_TEMPLATE = """
 
 <!DOCTYPE html>
-<html lang="ku" dir="rtl">
+<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
 
 <head>
 
@@ -448,6 +582,20 @@ autofocus>
 
 </div>
 
+<script>
+(function(){
+const lang=document.documentElement.lang||"ku";
+const D={
+ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
+ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
+en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
+const map=D[lang]||D.ku;
+const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
+document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
+})();
+</script>
 </body>
 </html>
 
@@ -462,7 +610,7 @@ HTML_TEMPLATE = """
 
 <!DOCTYPE html>
 
-<html lang="ku" dir="rtl">
+<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
 
 <head>
 
@@ -909,10 +1057,10 @@ placeholder="تێبینی خۆت لێرە بنووسە..."
 
 <section
 class="category"
-data-category="{{ category }}">
+data-category="{{ category_label(category) }}">
 
 <div class="category-title">
-🔸 {{ category }}
+🔸 {{ category_label(category) }}
 </div>
 
 <div class="grid">
@@ -957,7 +1105,7 @@ class="add"
 data-id="{{ item.id }}"
 data-name="{{ item.name }}"
 data-unit="{{ item.unit }}"
-data-category="{{ category }}"
+data-category="{{ category_label(category) }}"
 onclick="addItem(this)">
 زێدە
 </button>
@@ -1347,6 +1495,20 @@ function escapeHTML(value){
 
 </script>
 
+<script>
+(function(){
+const lang=document.documentElement.lang||"ku";
+const D={
+ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
+ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
+en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
+const map=D[lang]||D.ku;
+const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
+document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
+})();
+</script>
 </body>
 </html>
 
@@ -1362,32 +1524,11 @@ def get_company_info():
     return "پارکا شەهیدا", "07500113334"
 
 
-# =========================================================
-# LANGUAGE
-# =========================================================
 
-LANGUAGES = {
-    "ku": "کوردی بادینی",
-    "ar": "العربية",
-    "en": "English",
-}
-
-
-def get_language():
-    lang = session.get("language", "ku")
-    return lang if lang in LANGUAGES else "ku"
-
-
-@app.route("/set_language", methods=["POST"])
-def set_language():
-    if not logged_in():
-        return redirect(url_for("login"))
-    lang = request.form.get("language", "ku").strip().lower()
-    if lang not in LANGUAGES:
-        lang = "ku"
-    session["language"] = lang
-    return redirect(request.form.get("next") or url_for("settings_page"))
-
+@app.context_processor
+def inject_language_helpers():
+    lang = get_language()
+    return {"category_label": lambda value: category_label(value, lang)}
 
 # =========================================================
 # SETTINGS
@@ -1397,7 +1538,7 @@ SETTINGS_TEMPLATE = """
 
 <!DOCTYPE html>
 
-<html lang="ku" dir="rtl">
+<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
 
 <head>
 
@@ -1534,31 +1675,16 @@ th{
 
 </div>
 
-
 <div class="card">
-
-<h3>🌐 زمان / Language / اللغة</h3>
-
+<h3>🌐 زمانی بەرنامە / Application Language / لغة البرنامج</h3>
 <form method="POST" action="/set_language">
-
-<input type="hidden" name="next" value="/settings">
-
 <select name="language" onchange="this.form.submit()">
-
-<option value="ku" {% if current_language == "ku" %}selected{% endif %}>کوردی بادینی</option>
-<option value="ar" {% if current_language == "ar" %}selected{% endif %}>العربية</option>
-<option value="en" {% if current_language == "en" %}selected{% endif %}>English</option>
-
+<option value="ku" {% if language == "ku" %}selected{% endif %}>کوردی سۆرانی</option>
+<option value="ar" {% if language == "ar" %}selected{% endif %}>العربية</option>
+<option value="en" {% if language == "en" %}selected{% endif %}>English</option>
 </select>
-
 </form>
-
-<p style="margin:0;color:#666;font-size:13px;line-height:1.8">
-زمانی هەڵبژێردراو لە سێتینگەکە هەروەها بۆ شێوەی نیشاندانی قایمەی PDF بەکاردێت.
-</p>
-
 </div>
-
 
 <div class="card">
 
@@ -1573,8 +1699,8 @@ action="/add_item_setting">
 
 {% for cat in categories %}
 
-<option value="{{ cat }}">
-{{ cat }}
+<option value="{{ category_label(cat) }}">
+{{ category_label(cat) }}
 </option>
 
 {% endfor %}
@@ -1636,7 +1762,7 @@ required>
 
 <td>{{ item.id }}</td>
 
-<td>{{ item.category }}</td>
+<td>{{ category_label(item.category) }}</td>
 
 <td><b>{{ item.item_name }}</b></td>
 
@@ -1677,6 +1803,20 @@ onclick="return confirm('دڵنیایت؟')">
 
 </div>
 
+<script>
+(function(){
+const lang=document.documentElement.lang||"ku";
+const D={
+ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
+ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
+en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
+const map=D[lang]||D.ku;
+const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
+document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
+})();
+</script>
 </body>
 </html>
 
@@ -1691,7 +1831,7 @@ EDIT_TEMPLATE = """
 
 <!DOCTYPE html>
 
-<html lang="ku" dir="rtl">
+<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
 
 <head>
 
@@ -1769,12 +1909,12 @@ button{
 {% for cat in categories %}
 
 <option
-value="{{ cat }}"
+value="{{ category_label(cat) }}"
 {% if item.category == cat %}
 selected
 {% endif %}>
 
-{{ cat }}
+{{ category_label(cat) }}
 
 </option>
 
@@ -1808,6 +1948,20 @@ required>
 
 </div>
 
+<script>
+(function(){
+const lang=document.documentElement.lang||"ku";
+const D={
+ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
+ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
+en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
+const map=D[lang]||D.ku;
+const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
+document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
+})();
+</script>
 </body>
 </html>
 
@@ -1843,8 +1997,9 @@ def login():
         error = "❌ ڕەمز هەڵەیە"
 
     return render_template_string(
-        LOGIN_TEMPLATE,
-        error=error
+        localize_template(LOGIN_TEMPLATE, get_language()),
+        error=error,
+        language=get_language()
     )
 
 
@@ -1871,11 +2026,12 @@ def index():
     device_id = get_device_id()
 
     return render_template_string(
-        HTML_TEMPLATE,
+        localize_template(HTML_TEMPLATE, get_language()),
         all_items=get_items(search),
         orders=get_orders(device_id),
         current_note=get_note(device_id),
-        search=search
+        search=search,
+        language=get_language()
     )
 
 
@@ -2092,13 +2248,27 @@ def settings_page():
     location, phone = get_company_info()
 
     return render_template_string(
-        SETTINGS_TEMPLATE,
+        localize_template(SETTINGS_TEMPLATE, get_language()),
         items=get_all_items(),
         categories=categories,
         location=location,
         phone=phone,
-        current_language=get_language()
+        language=get_language()
     )
+
+
+@app.route("/set_language", methods=["POST"])
+def set_language():
+    if not logged_in():
+        return redirect(url_for("login"))
+    lang = request.form.get("language", "ku")
+    if lang not in LANGUAGE_CHOICES:
+        lang = "ku"
+    conn = get_db()
+    conn.execute("UPDATE company_info SET language=? WHERE id=1", (lang,))
+    conn.commit()
+    conn.close()
+    return redirect(request.form.get("next") or url_for("settings_page"))
 
 
 @app.route("/save_company_info", methods=["POST"])
@@ -2269,9 +2439,10 @@ def edit_item(item_id):
     conn.close()
 
     return render_template_string(
-        EDIT_TEMPLATE,
+        localize_template(EDIT_TEMPLATE, get_language()),
         item=item,
-        categories=categories
+        categories=categories,
+        language=get_language()
     )
 
 
@@ -2336,146 +2507,260 @@ def download_pdf():
         return redirect(url_for("login"))
 
     try:
-        from reportlab.lib.pagesizes import A4
+        # ReportLab + RTL/Arabic/Kurdish support
+        from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
         from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-            Image, KeepTogether
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
         )
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.utils import ImageReader
         from xml.sax.saxutils import escape as xml_escape
 
-        import arabic_reshaper
-        from bidi.algorithm import get_display
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+        except ImportError as exc:
+            raise RuntimeError(
+                "Arabic/Kurdish PDF support requires arabic-reshaper and "
+                "python-bidi. Install with: pip install arabic-reshaper python-bidi"
+            ) from exc
 
+        # -----------------------------------------------------
+        # RTL TEXT PIPELINE
+        # Every Arabic/Kurdish string MUST pass through this
+        # function before it reaches Paragraph/Table.
+        # -----------------------------------------------------
         def pdf_text(value):
             text = "" if value is None else str(value)
+            # Shape Arabic/Kurdish joining forms first, then apply
+            # the Unicode bidirectional algorithm for visual RTL order.
+            if not rtl:
+                return xml_escape(text)
             shaped = arabic_reshaper.reshape(text)
             visual = get_display(shaped, base_dir="R")
             return xml_escape(visual)
-
-        def tr(ku, ar, en):
-            # Keep the PDF explicitly understandable in all three languages.
-            return f"{ku} / {ar} / {en}"
 
         device_id = get_device_id()
         orders = get_orders(device_id)
         note = get_note(device_id)
         location, phone = get_company_info()
+        lang = get_language()
+        rtl = lang in ("ku", "ar")
+        L = LANG_TEXT.get(lang, LANG_TEXT["ku"])
 
+        # -----------------------------------------------------
+        # AMIRI FONT - required for all PDF text
+        # -----------------------------------------------------
         base_dir = os.path.dirname(os.path.abspath(__file__))
         amiri_dir = os.path.join(base_dir, "Amiri")
-        regular = os.path.join(amiri_dir, "Amiri-Regular.ttf")
-        bold = os.path.join(amiri_dir, "Amiri-Bold.ttf")
+        amiri_regular_path = os.path.join(amiri_dir, "Amiri-Regular.ttf")
+        amiri_bold_path = os.path.join(amiri_dir, "Amiri-Bold.ttf")
 
-        if not os.path.isfile(regular):
-            raise FileNotFoundError("Amiri-Regular.ttf not found: " + regular)
+        if not os.path.isfile(amiri_regular_path):
+            raise FileNotFoundError(
+                "Amiri-Regular.ttf not found: " + amiri_regular_path
+            )
 
         if "OrganicAmiri" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont("OrganicAmiri", regular))
+            pdfmetrics.registerFont(TTFont("OrganicAmiri", amiri_regular_path))
+
         font_regular = "OrganicAmiri"
-        font_bold = font_regular
-        if os.path.isfile(bold):
+        font_bold = "OrganicAmiri"
+
+        if os.path.isfile(amiri_bold_path):
             if "OrganicAmiriBold" not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont("OrganicAmiriBold", bold))
+                pdfmetrics.registerFont(TTFont("OrganicAmiriBold", amiri_bold_path))
             font_bold = "OrganicAmiriBold"
 
-        filename = "Organic_Juices_Qayma_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".pdf"
+        filename = (
+            "Organic_Juices_Qayma_"
+            + datetime.now().strftime("%Y%m%d_%H%M%S")
+            + ".pdf"
+        )
 
-        # TRUE A4 portrait. The document is never generated smaller than A4.
+        page_size = landscape(A4)
         doc = SimpleDocTemplate(
             filename,
-            pagesize=A4,
-            rightMargin=24,
-            leftMargin=24,
-            topMargin=22,
-            bottomMargin=22,
+            pagesize=page_size,
+            rightMargin=18,
+            leftMargin=18,
+            topMargin=14,
+            bottomMargin=14,
             title="ORGANIC JUICES - Qayma",
             author="ORGANIC JUICES",
-            allowSplitting=1,
+            allowSplitting=0,
         )
 
         styles = getSampleStyleSheet()
+
+        # Compact styles are intentional: the invoice must stay together
+        # on one Landscape A4 page.
         brand_style = ParagraphStyle(
-            "Brand", parent=styles["Normal"], fontName=font_bold,
-            fontSize=20, leading=23, alignment=TA_CENTER,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "OrganicBrandLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=22,
+            leading=24,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        subtitle_style = ParagraphStyle(
+            "OrganicSubtitleLandscape",
+            parent=styles["Normal"],
+            fontName=font_regular,
+            fontSize=7.5,
+            leading=9,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#4d6f58"),
+            spaceAfter=0,
+            spaceBefore=0,
         )
         title_style = ParagraphStyle(
-            "Title", parent=styles["Normal"], fontName=font_bold,
-            fontSize=13, leading=16, alignment=TA_CENTER,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "QaymaTitleLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=15.5,
+            leading=18,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         info_style = ParagraphStyle(
-            "Info", parent=styles["Normal"], fontName=font_bold,
-            fontSize=8.2, leading=10, alignment=TA_CENTER,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "QaymaInfoLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=8,
+            leading=10,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         section_style = ParagraphStyle(
-            "Section", parent=styles["Normal"], fontName=font_bold,
-            fontSize=10, leading=12, alignment=TA_CENTER,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "QaymaSectionLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=10.5,
+            leading=12.5,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         head_style = ParagraphStyle(
-            "Head", parent=styles["Normal"], fontName=font_bold,
-            fontSize=8.3, leading=10, alignment=TA_CENTER,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "QaymaHeadLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=8.5,
+            leading=10.5,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         cell_style = ParagraphStyle(
-            "Cell", parent=styles["Normal"], fontName=font_bold,
-            fontSize=8.3, leading=10, alignment=TA_CENTER,
-            textColor=colors.black, wordWrap="CJK", spaceAfter=0, spaceBefore=0,
+            "QaymaCellLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=8,
+            leading=9.5,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            wordWrap="CJK",
+            spaceAfter=0,
+            spaceBefore=0,
         )
         note_style = ParagraphStyle(
-            "Note", parent=styles["Normal"], fontName=font_regular,
-            fontSize=8, leading=10, alignment=TA_RIGHT,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "QaymaNoteLandscape",
+            parent=styles["Normal"],
+            fontName=font_regular,
+            fontSize=7.5,
+            leading=9,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
         footer_style = ParagraphStyle(
-            "Footer", parent=styles["Normal"], fontName=font_bold,
-            fontSize=9, leading=11, alignment=TA_CENTER,
-            textColor=colors.black, spaceAfter=0, spaceBefore=0,
+            "QaymaFooterLandscape",
+            parent=styles["Normal"],
+            fontName=font_bold,
+            fontSize=9,
+            leading=10,
+            alignment=TA_CENTER,
+            textColor=colors.black,
+            spaceAfter=0,
+            spaceBefore=0,
         )
 
-        def normalize_unit(unit):
+        # -----------------------------------------------------
+        # Unit normalization for PDF display.
+        # The returned value is still passed through pdf_text().
+        # -----------------------------------------------------
+        def arabic_unit(unit):
             u = str(unit or "").strip().lower()
             mapping = {
-                "دانە": "قطعة", "دانه": "قطعة", "دانة": "قطعة",
-                "قطعة": "قطعة", "قطعه": "قطعة",
-                "کیلو": "كێلو", "كيلو": "كێلو", "كێلو": "كێلو",
-                "کێلو": "كێلو", "کغم": "كێلو", "كغم": "كێلو", "kg": "كێلو",
-                "کارتۆن": "كارتۆن", "كارتون": "كارتۆن", "کارتن": "كارتۆن",
-                "carton": "كارتۆن", "لیتر": "لتر", "ليتر": "لتر", "l": "لتر",
-                "liter": "لتر", "litre": "لتر", "بۆکس": "بۆکس", "بوكس": "بۆکس",
+                "دانە": "قطعة",
+                "دانه": "قطعة",
+                "دانة": "قطعة",
+                "قطعة": "قطعة",
+                "قطعه": "قطعة",
+                "کیلو": "كێلو",
+                "كيلو": "كێلو",
+                "كێلو": "كێلو",
+                "کێلو": "كێلو",
+                "کغم": "كێلو",
+                "كغم": "كێلو",
+                "kg": "كێلو",
+                "کارتۆن": "كارتۆن",
+                "كارتون": "كارتۆن",
+                "کارتن": "كارتۆن",
+                "carton": "كارتۆن",
+                "لیتر": "لتر",
+                "ليتر": "لتر",
+                "l": "لتر",
+                "liter": "لتر",
+                "litre": "لتر",
+                "بۆکس": "بۆکس",
+                "بوكس": "بۆکس",
                 "box": "بۆکس",
+                "لبان": "دانە",
             }
-            return mapping.get(u, str(unit or ""))
+            key = mapping.get(u, str(unit or ""))
+            if lang == "en":
+                return {"قطعة":"Piece","كێلو":"Kilo","كغم":"Kilo","كارتۆن":"Carton","لتر":"Liter","بۆکس":"Box","دانە":"Piece"}.get(key, key)
+            if lang == "ar":
+                return {"قطعة":"قطعة","كێلو":"كغم","كغم":"كغم","كارتۆن":"كرتون","لتر":"لتر","بۆکس":"علبة","دانە":"قطعة"}.get(key, key)
+            return {"قطعة":"دانە","كێلو":"کیلۆ","كغم":"کیلۆ","كارتۆن":"کارتۆن","لتر":"لیتر","بۆکس":"بۆکس","دانە":"دانە"}.get(key, key)
 
         def fmt_qty(value):
             try:
-                n = float(value)
-                return str(int(n)) if n.is_integer() else f"{n:g}"
+                number = float(value)
+                if number.is_integer():
+                    return str(int(number))
+                return f"{number:g}"
             except Exception:
                 return str(value)
 
-        # IMPORTANT: only orders actually added to this Qayma are printed.
-        category_order = [
-            ("مەعمەل", tr("مواد معمل", "مواد المعمل", "Factory Materials")),
-            ("مەغزەن", tr("مواد مخزن", "مواد المخزن", "Warehouse Materials")),
-            ("فێقی", tr("فێقی", "فِقّي", "Feki")),
-        ]
-        grouped = {key: [] for key, _ in category_order}
+        # Only requested/added orders are printed.
+        grouped = {"مەعمەل": [], "مەغزەن": [], "فێقی": []}
         for order in orders:
-            key = str(order.get("category") or "")
-            grouped.setdefault(key, []).append(order)
+            cat = str(order["category"])
+            grouped.setdefault(cat, []).append(order)
 
         story = []
         logo_path = os.path.join(base_dir, "logo.png")
 
+        # -----------------------------------------------------
+        # Compact header: logo + ORGANIC JUICES + Qayma info.
+        # -----------------------------------------------------
         logo_cell = ""
         if os.path.exists(logo_path):
             try:
@@ -2484,122 +2769,176 @@ def download_pdf():
             except Exception:
                 logo_cell = ""
 
+        brand_block = [
+            Paragraph(pdf_text("ORGANIC JUICES"), brand_style),
+            Paragraph(pdf_text("100% Natural"), subtitle_style),
+            Spacer(1, 2),
+            Paragraph(pdf_text(L["qayma"]), title_style),
+        ]
         header = Table(
-            [[logo_cell, [
-                Paragraph(pdf_text("ORGANIC JUICES"), brand_style),
-                Spacer(1, 2),
-                Paragraph(pdf_text(tr("قایمە", "قائمة", "Invoice")), title_style),
-            ], ""]],
-            colWidths=[58, doc.width - 116, 58],
+            [[logo_cell, brand_block, ""]],
+            colWidths=[62, doc.width - 124, 62],
+            rowHeights=[54],
         )
         header.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOX", (0, 0), (-1, -1), 0.55, colors.HexColor("#d5ddd7")),
+            ("BOX", (0, 0), (-1, -1), 0.55, colors.HexColor("#d8e2da")),
             ("BACKGROUND", (0, 0), (-1, -1), colors.white),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
         story.append(header)
-        story.append(Spacer(1, 5))
+        story.append(Spacer(1, 4))
 
-        info = Table([[
-            Paragraph(pdf_text(tr("شوێن: " + str(location), "الموقع: " + str(location), "Location: " + str(location))), info_style),
-            Paragraph(pdf_text(tr("مۆبایل: " + str(phone), "الهاتف: " + str(phone), "Phone: " + str(phone))), info_style),
-            Paragraph(pdf_text(tr("بەروار: " + datetime.now().strftime("%Y / %m / %d"), "التاريخ: " + datetime.now().strftime("%Y / %m / %d"), "Date: " + datetime.now().strftime("%Y / %m / %d"))), info_style),
-        ]], colWidths=[doc.width / 3] * 3)
+        info_data = [[
+            Paragraph(pdf_text(L["location"] + ": " + str(location)), info_style),
+            Paragraph(pdf_text(L["phone"] + ": " + str(phone)), info_style),
+            Paragraph(
+                pdf_text(L["date"] + ": " + datetime.now().strftime("%Y / %m / %d")),
+                info_style,
+            ),
+        ]]
+        info = Table(info_data, colWidths=[doc.width / 3] * 3, rowHeights=[22])
         info.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
             ("BOX", (0, 0), (-1, -1), 0.45, colors.HexColor("#d6d6d6")),
             ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#e2e2e2")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("LEFTPADDING", (0, 0), (-1, -1), 3),
             ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
         story.append(info)
 
         if note:
-            story.append(Spacer(1, 4))
-            story.append(Paragraph(
-                pdf_text(tr("تێبینی: " + str(note), "ملاحظة: " + str(note), "Note: " + str(note))),
-                note_style,
-            ))
+            story.append(Spacer(1, 3))
+            story.append(Paragraph(pdf_text(L["note"] + ": " + str(note)), note_style))
 
-        story.append(Spacer(1, 7))
-
-        # One unified A4 table. Empty categories are not printed.
-        data = [[
-            Paragraph(pdf_text(tr("بڕ", "العدد", "Quantity")), head_style),
-            Paragraph(pdf_text(tr("ماددە", "المادة", "Item")), head_style),
-            Paragraph(pdf_text(tr("یەکە", "الوحدة", "Unit")), head_style),
-        ]]
-
-        any_rows = False
-        for key, label in category_order:
-            rows = grouped.get(key, [])
-            if not rows:
-                continue
-            any_rows = True
-            data.append([Paragraph(pdf_text(label), section_style), "", ""])
-            for row in rows:
-                data.append([
-                    Paragraph(pdf_text(fmt_qty(row.get("quantity", ""))), cell_style),
-                    Paragraph(pdf_text(str(row.get("item_name") or "")), cell_style),
-                    Paragraph(pdf_text(normalize_unit(row.get("unit"))), cell_style),
-                ])
-
-        if not any_rows:
-            data.append([
-                Paragraph(pdf_text(tr("قایمە بەتاڵە", "القائمة فارغة", "The invoice is empty")), cell_style),
-                "", ""
-            ])
-
-        table = Table(data, colWidths=[doc.width * .20, doc.width * .55, doc.width * .25], repeatRows=1)
-        ts = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf4ee")),
-            ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#aeb9b0")),
-            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#89958d")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 3),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]
-        row_idx = 1
-        for key, label in category_order:
-            if grouped.get(key):
-                ts += [
-                    ("SPAN", (0, row_idx), (-1, row_idx)),
-                    ("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#e8f0e9")),
-                ]
-                row_idx += 1 + len(grouped[key])
-        table.setStyle(TableStyle(ts))
-        story.append(KeepTogether(table))
         story.append(Spacer(1, 5))
-        story.append(Paragraph(
-            pdf_text(tr("کۆی بابەتەکان: " + str(len(orders)), "إجمالي المواد: " + str(len(orders)), "Total items: " + str(len(orders)))),
-            footer_style,
-        ))
 
+        # Only non-empty categories are included in the Qayma.
+        category_specs = [
+            ("مواد معمل" if lang == "ar" else "Factory Materials" if lang == "en" else "مواد معمل", "مەعمەل"),
+            ("مواد مخزن" if lang == "ar" else "Warehouse Materials" if lang == "en" else "مواد مخزن", "مەغزەن"),
+            ("الفواكه" if lang == "ar" else "Fruits" if lang == "en" else "فێقی", "فێقی"),
+        ]
+        non_empty = [
+            (title, key, grouped.get(key, []))
+            for title, key in category_specs
+            if grouped.get(key, [])
+        ]
+
+        # Put all non-empty categories side-by-side. This keeps the complete
+        # invoice compact and bound together on one Landscape A4 page.
+        if non_empty:
+            usable_w = doc.width
+            gap = 7
+            n = len(non_empty)
+            col_w = (usable_w - gap * (n - 1)) / n
+            cells = []
+
+            for title, key, rows in non_empty:
+                data = [[
+                    Paragraph(pdf_text(L["qty"]), head_style),
+                    Paragraph(pdf_text(L["material"]), head_style),
+                    Paragraph(pdf_text(L["unit_header"]), head_style),
+                ]]
+
+                for row in rows:
+                    data.append([
+                        Paragraph(pdf_text(fmt_qty(row.get("quantity", ""))), cell_style),
+                        Paragraph(pdf_text(str(row.get("item_name") or "")), cell_style),
+                        Paragraph(pdf_text(arabic_unit(row.get("unit"))), cell_style),
+                    ])
+
+                inner = Table(
+                    data,
+                    colWidths=[col_w * 0.20, col_w * 0.56, col_w * 0.24],
+                    repeatRows=1,
+                )
+                inner.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf4ee")),
+                    ("GRID", (0, 0), (-1, -1), 0.38, colors.HexColor("#aeb9b0")),
+                    ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#8e9b91")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2.0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2.0),
+                ]))
+
+                cell = Table(
+                    [[Paragraph(pdf_text(title), section_style)], [inner]],
+                    colWidths=[col_w],
+                )
+                cell.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f0e9")),
+                    ("BOX", (0, 0), (-1, -1), 0.65, colors.HexColor("#9cab9e")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+                ]))
+                cells.append(cell)
+
+            category_row = Table(
+                [cells],
+                colWidths=[col_w] * n,
+                hAlign="CENTER",
+            )
+            category_row.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), gap / 2),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            # Keep the invoice tables and their summary together so the
+            # layout does not scatter across pages.
+            summary = Paragraph(
+                pdf_text(L["total"] + ": " + str(len(orders))),
+                footer_style,
+            )
+            story.append(KeepTogether([category_row, Spacer(1, 3), summary]))
+        else:
+            story.append(
+                Paragraph(
+                    pdf_text(L["total"] + ": " + str(len(orders))),
+                    footer_style,
+                )
+            )
+
+        # -----------------------------------------------------
+        # Watermark: very light logo, centered behind the invoice.
+        # -----------------------------------------------------
         def draw_watermark(canvas, doc_obj):
             canvas.saveState()
             try:
                 if os.path.exists(logo_path):
                     img = ImageReader(logo_path)
                     iw, ih = img.getSize()
-                    target_w = 260
-                    target_h = target_w * ih / float(iw) if iw else 260
-                    page_w, page_h = A4
+                    target_w = 300
+                    target_h = target_w * ih / float(iw) if iw else 300
+                    page_w, page_h = page_size
+                    x = (page_w - target_w) / 2
+                    y = (page_h - target_h) / 2 - 4
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(0.035)
                     canvas.drawImage(
-                        img, (page_w-target_w)/2, (page_h-target_h)/2,
-                        width=target_w, height=target_h, mask="auto",
+                        img,
+                        x,
+                        y,
+                        width=target_w,
+                        height=target_h,
+                        mask="auto",
                         preserveAspectRatio=True,
                     )
                     if hasattr(canvas, "setFillAlpha"):
@@ -2608,7 +2947,12 @@ def download_pdf():
                 pass
             canvas.restoreState()
 
-        doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+        doc.build(
+            story,
+            onFirstPage=draw_watermark,
+            onLaterPages=draw_watermark,
+        )
+
         return send_file(filename, as_attachment=True)
 
     except Exception as e:
