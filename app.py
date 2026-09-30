@@ -1363,6 +1363,33 @@ def get_company_info():
 
 
 # =========================================================
+# LANGUAGE
+# =========================================================
+
+LANGUAGES = {
+    "ku": "کوردی بادینی",
+    "ar": "العربية",
+    "en": "English",
+}
+
+
+def get_language():
+    lang = session.get("language", "ku")
+    return lang if lang in LANGUAGES else "ku"
+
+
+@app.route("/set_language", methods=["POST"])
+def set_language():
+    if not logged_in():
+        return redirect(url_for("login"))
+    lang = request.form.get("language", "ku").strip().lower()
+    if lang not in LANGUAGES:
+        lang = "ku"
+    session["language"] = lang
+    return redirect(request.form.get("next") or url_for("settings_page"))
+
+
+# =========================================================
 # SETTINGS
 # =========================================================
 
@@ -1504,6 +1531,31 @@ th{
 <a class="back" href="/">
 ⬅️ گەڕانەوە
 </a>
+
+</div>
+
+
+<div class="card">
+
+<h3>🌐 زمان / Language / اللغة</h3>
+
+<form method="POST" action="/set_language">
+
+<input type="hidden" name="next" value="/settings">
+
+<select name="language" onchange="this.form.submit()">
+
+<option value="ku" {% if current_language == "ku" %}selected{% endif %}>کوردی بادینی</option>
+<option value="ar" {% if current_language == "ar" %}selected{% endif %}>العربية</option>
+<option value="en" {% if current_language == "en" %}selected{% endif %}>English</option>
+
+</select>
+
+</form>
+
+<p style="margin:0;color:#666;font-size:13px;line-height:1.8">
+زمانی هەڵبژێردراو لە سێتینگەکە هەروەها بۆ شێوەی نیشاندانی قایمەی PDF بەکاردێت.
+</p>
 
 </div>
 
@@ -2044,7 +2096,8 @@ def settings_page():
         items=get_all_items(),
         categories=categories,
         location=location,
-        phone=phone
+        phone=phone,
+        current_language=get_language()
     )
 
 
@@ -2283,262 +2336,146 @@ def download_pdf():
         return redirect(url_for("login"))
 
     try:
-        # ReportLab + RTL/Arabic/Kurdish support
-        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
         from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            Image, KeepTogether
         )
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.utils import ImageReader
         from xml.sax.saxutils import escape as xml_escape
 
-        try:
-            import arabic_reshaper
-            from bidi.algorithm import get_display
-        except ImportError as exc:
-            raise RuntimeError(
-                "Arabic/Kurdish PDF support requires arabic-reshaper and "
-                "python-bidi. Install with: pip install arabic-reshaper python-bidi"
-            ) from exc
+        import arabic_reshaper
+        from bidi.algorithm import get_display
 
-        # -----------------------------------------------------
-        # RTL TEXT PIPELINE
-        # Every Arabic/Kurdish string MUST pass through this
-        # function before it reaches Paragraph/Table.
-        # -----------------------------------------------------
         def pdf_text(value):
             text = "" if value is None else str(value)
-            # Shape Arabic/Kurdish joining forms first, then apply
-            # the Unicode bidirectional algorithm for visual RTL order.
             shaped = arabic_reshaper.reshape(text)
             visual = get_display(shaped, base_dir="R")
             return xml_escape(visual)
 
-        def pdf_english(value):
-            return xml_escape("" if value is None else str(value))
-
-        def pdf_tri(kurdish, arabic, english):
-            # Each language is shaped independently so Arabic/Kurdish never
-            # gets mixed with Latin text and never appears letter-by-letter.
-            return (
-                pdf_text(kurdish) + "<br/>" +
-                pdf_text(arabic) + "<br/>" +
-                pdf_english(english)
-            )
+        def tr(ku, ar, en):
+            # Keep the PDF explicitly understandable in all three languages.
+            return f"{ku} / {ar} / {en}"
 
         device_id = get_device_id()
         orders = get_orders(device_id)
         note = get_note(device_id)
         location, phone = get_company_info()
 
-        # -----------------------------------------------------
-        # AMIRI FONT - required for all PDF text
-        # -----------------------------------------------------
         base_dir = os.path.dirname(os.path.abspath(__file__))
         amiri_dir = os.path.join(base_dir, "Amiri")
-        amiri_regular_path = os.path.join(amiri_dir, "Amiri-Regular.ttf")
-        amiri_bold_path = os.path.join(amiri_dir, "Amiri-Bold.ttf")
+        regular = os.path.join(amiri_dir, "Amiri-Regular.ttf")
+        bold = os.path.join(amiri_dir, "Amiri-Bold.ttf")
 
-        if not os.path.isfile(amiri_regular_path):
-            raise FileNotFoundError(
-                "Amiri-Regular.ttf not found: " + amiri_regular_path
-            )
+        if not os.path.isfile(regular):
+            raise FileNotFoundError("Amiri-Regular.ttf not found: " + regular)
 
         if "OrganicAmiri" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont("OrganicAmiri", amiri_regular_path))
-
+            pdfmetrics.registerFont(TTFont("OrganicAmiri", regular))
         font_regular = "OrganicAmiri"
-        font_bold = "OrganicAmiri"
-
-        if os.path.isfile(amiri_bold_path):
+        font_bold = font_regular
+        if os.path.isfile(bold):
             if "OrganicAmiriBold" not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont("OrganicAmiriBold", amiri_bold_path))
+                pdfmetrics.registerFont(TTFont("OrganicAmiriBold", bold))
             font_bold = "OrganicAmiriBold"
 
-        filename = (
-            "Organic_Juices_Qayma_"
-            + datetime.now().strftime("%Y%m%d_%H%M%S")
-            + ".pdf"
-        )
+        filename = "Organic_Juices_Qayma_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".pdf"
 
-        page_size = landscape(A4)
+        # TRUE A4 portrait. The document is never generated smaller than A4.
         doc = SimpleDocTemplate(
             filename,
-            pagesize=page_size,
-            rightMargin=18,
-            leftMargin=18,
-            topMargin=14,
-            bottomMargin=14,
+            pagesize=A4,
+            rightMargin=24,
+            leftMargin=24,
+            topMargin=22,
+            bottomMargin=22,
             title="ORGANIC JUICES - Qayma",
             author="ORGANIC JUICES",
-            allowSplitting=0,
+            allowSplitting=1,
         )
 
         styles = getSampleStyleSheet()
-
-        # Compact styles are intentional: the invoice must stay together
-        # on one Landscape A4 page.
         brand_style = ParagraphStyle(
-            "OrganicBrandLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=22,
-            leading=24,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
-        )
-        subtitle_style = ParagraphStyle(
-            "OrganicSubtitleLandscape",
-            parent=styles["Normal"],
-            fontName=font_regular,
-            fontSize=7.5,
-            leading=9,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor("#4d6f58"),
-            spaceAfter=0,
-            spaceBefore=0,
+            "Brand", parent=styles["Normal"], fontName=font_bold,
+            fontSize=20, leading=23, alignment=TA_CENTER,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
         title_style = ParagraphStyle(
-            "QaymaTitleLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=13.5,
-            leading=15.0,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
+            "Title", parent=styles["Normal"], fontName=font_bold,
+            fontSize=13, leading=16, alignment=TA_CENTER,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
         info_style = ParagraphStyle(
-            "QaymaInfoLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=6.2,
-            leading=7.3,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
+            "Info", parent=styles["Normal"], fontName=font_bold,
+            fontSize=8.2, leading=10, alignment=TA_CENTER,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
         section_style = ParagraphStyle(
-            "QaymaSectionLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=8.5,
-            leading=10.0,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
+            "Section", parent=styles["Normal"], fontName=font_bold,
+            fontSize=10, leading=12, alignment=TA_CENTER,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
         head_style = ParagraphStyle(
-            "QaymaHeadLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=7.0,
-            leading=8.0,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
+            "Head", parent=styles["Normal"], fontName=font_bold,
+            fontSize=8.3, leading=10, alignment=TA_CENTER,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
         cell_style = ParagraphStyle(
-            "QaymaCellLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=8,
-            leading=9.5,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            wordWrap="CJK",
-            spaceAfter=0,
-            spaceBefore=0,
+            "Cell", parent=styles["Normal"], fontName=font_bold,
+            fontSize=8.3, leading=10, alignment=TA_CENTER,
+            textColor=colors.black, wordWrap="CJK", spaceAfter=0, spaceBefore=0,
         )
         note_style = ParagraphStyle(
-            "QaymaNoteLandscape",
-            parent=styles["Normal"],
-            fontName=font_regular,
-            fontSize=7.5,
-            leading=9,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
+            "Note", parent=styles["Normal"], fontName=font_regular,
+            fontSize=8, leading=10, alignment=TA_RIGHT,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
         footer_style = ParagraphStyle(
-            "QaymaFooterLandscape",
-            parent=styles["Normal"],
-            fontName=font_bold,
-            fontSize=9,
-            leading=10,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            spaceAfter=0,
-            spaceBefore=0,
+            "Footer", parent=styles["Normal"], fontName=font_bold,
+            fontSize=9, leading=11, alignment=TA_CENTER,
+            textColor=colors.black, spaceAfter=0, spaceBefore=0,
         )
 
-        # -----------------------------------------------------
-        # Unit normalization for PDF display.
-        # The returned value is still passed through pdf_text().
-        # -----------------------------------------------------
-        def arabic_unit(unit):
+        def normalize_unit(unit):
             u = str(unit or "").strip().lower()
             mapping = {
-                "دانە": "قطعة",
-                "دانه": "قطعة",
-                "دانة": "قطعة",
-                "قطعة": "قطعة",
-                "قطعه": "قطعة",
-                "کیلو": "كێلو",
-                "كيلو": "كێلو",
-                "كێلو": "كێلو",
-                "کێلو": "كێلو",
-                "کغم": "كێلو",
-                "كغم": "كێلو",
-                "kg": "كێلو",
-                "کارتۆن": "كارتۆن",
-                "كارتون": "كارتۆن",
-                "کارتن": "كارتۆن",
-                "carton": "كارتۆن",
-                "لیتر": "لتر",
-                "ليتر": "لتر",
-                "l": "لتر",
-                "liter": "لتر",
-                "litre": "لتر",
-                "بۆکس": "بۆکس",
-                "بوكس": "بۆکس",
+                "دانە": "قطعة", "دانه": "قطعة", "دانة": "قطعة",
+                "قطعة": "قطعة", "قطعه": "قطعة",
+                "کیلو": "كێلو", "كيلو": "كێلو", "كێلو": "كێلو",
+                "کێلو": "كێلو", "کغم": "كێلو", "كغم": "كێلو", "kg": "كێلو",
+                "کارتۆن": "كارتۆن", "كارتون": "كارتۆن", "کارتن": "كارتۆن",
+                "carton": "كارتۆن", "لیتر": "لتر", "ليتر": "لتر", "l": "لتر",
+                "liter": "لتر", "litre": "لتر", "بۆکس": "بۆکس", "بوكس": "بۆکس",
                 "box": "بۆکس",
-                "لبان": "دانە",
             }
             return mapping.get(u, str(unit or ""))
 
         def fmt_qty(value):
             try:
-                number = float(value)
-                if number.is_integer():
-                    return str(int(number))
-                return f"{number:g}"
+                n = float(value)
+                return str(int(n)) if n.is_integer() else f"{n:g}"
             except Exception:
                 return str(value)
 
-        # Only requested/added orders are printed.
-        grouped = {"مەعمەل": [], "مەغزەن": [], "فێقی": []}
+        # IMPORTANT: only orders actually added to this Qayma are printed.
+        category_order = [
+            ("مەعمەل", tr("مواد معمل", "مواد المعمل", "Factory Materials")),
+            ("مەغزەن", tr("مواد مخزن", "مواد المخزن", "Warehouse Materials")),
+            ("فێقی", tr("فێقی", "فِقّي", "Feki")),
+        ]
+        grouped = {key: [] for key, _ in category_order}
         for order in orders:
-            cat = str(order["category"])
-            grouped.setdefault(cat, []).append(order)
+            key = str(order.get("category") or "")
+            grouped.setdefault(key, []).append(order)
 
         story = []
         logo_path = os.path.join(base_dir, "logo.png")
 
-        # -----------------------------------------------------
-        # Compact header: logo + ORGANIC JUICES + Qayma info.
-        # -----------------------------------------------------
         logo_cell = ""
         if os.path.exists(logo_path):
             try:
@@ -2547,200 +2484,122 @@ def download_pdf():
             except Exception:
                 logo_cell = ""
 
-        brand_block = [
-            Paragraph(pdf_english("ORGANIC JUICES"), brand_style),
-            Spacer(1, 1),
-            Paragraph(pdf_tri("قایمە", "قائمة", "INVOICE"), title_style),
-        ]
         header = Table(
-            [[logo_cell, brand_block, ""]],
-            colWidths=[62, doc.width - 124, 62],
-            rowHeights=[56],
+            [[logo_cell, [
+                Paragraph(pdf_text("ORGANIC JUICES"), brand_style),
+                Spacer(1, 2),
+                Paragraph(pdf_text(tr("قایمە", "قائمة", "Invoice")), title_style),
+            ], ""]],
+            colWidths=[58, doc.width - 116, 58],
         )
         header.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOX", (0, 0), (-1, -1), 0.55, colors.HexColor("#d8e2da")),
+            ("BOX", (0, 0), (-1, -1), 0.55, colors.HexColor("#d5ddd7")),
             ("BACKGROUND", (0, 0), (-1, -1), colors.white),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         story.append(header)
-        story.append(Spacer(1, 4))
+        story.append(Spacer(1, 5))
 
-        info_data = [[
-            Paragraph(
-                pdf_tri("شوێن: " + str(location), "الموقع: " + str(location), "Location: " + str(location)),
-                info_style,
-            ),
-            Paragraph(
-                pdf_tri("مۆبایل: " + str(phone), "الهاتف: " + str(phone), "Phone: " + str(phone)),
-                info_style,
-            ),
-            Paragraph(
-                pdf_tri(
-                    "بەروار: " + datetime.now().strftime("%Y / %m / %d"),
-                    "التاريخ: " + datetime.now().strftime("%Y / %m / %d"),
-                    "Date: " + datetime.now().strftime("%Y / %m / %d"),
-                ),
-                info_style,
-            ),
-        ]]
-        info = Table(info_data, colWidths=[doc.width / 3] * 3, rowHeights=[22])
+        info = Table([[
+            Paragraph(pdf_text(tr("شوێن: " + str(location), "الموقع: " + str(location), "Location: " + str(location))), info_style),
+            Paragraph(pdf_text(tr("مۆبایل: " + str(phone), "الهاتف: " + str(phone), "Phone: " + str(phone))), info_style),
+            Paragraph(pdf_text(tr("بەروار: " + datetime.now().strftime("%Y / %m / %d"), "التاريخ: " + datetime.now().strftime("%Y / %m / %d"), "Date: " + datetime.now().strftime("%Y / %m / %d"))), info_style),
+        ]], colWidths=[doc.width / 3] * 3)
         info.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
             ("BOX", (0, 0), (-1, -1), 0.45, colors.HexColor("#d6d6d6")),
             ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#e2e2e2")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("LEFTPADDING", (0, 0), (-1, -1), 3),
             ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         story.append(info)
 
         if note:
-            story.append(Spacer(1, 3))
-            story.append(
-                Paragraph(
-                    pdf_tri("تێبینی: " + str(note), "ملاحظة: " + str(note), "Note: " + str(note)),
-                    note_style,
-                )
-            )
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(
+                pdf_text(tr("تێبینی: " + str(note), "ملاحظة: " + str(note), "Note: " + str(note))),
+                note_style,
+            ))
 
+        story.append(Spacer(1, 7))
+
+        # One unified A4 table. Empty categories are not printed.
+        data = [[
+            Paragraph(pdf_text(tr("بڕ", "العدد", "Quantity")), head_style),
+            Paragraph(pdf_text(tr("ماددە", "المادة", "Item")), head_style),
+            Paragraph(pdf_text(tr("یەکە", "الوحدة", "Unit")), head_style),
+        ]]
+
+        any_rows = False
+        for key, label in category_order:
+            rows = grouped.get(key, [])
+            if not rows:
+                continue
+            any_rows = True
+            data.append([Paragraph(pdf_text(label), section_style), "", ""])
+            for row in rows:
+                data.append([
+                    Paragraph(pdf_text(fmt_qty(row.get("quantity", ""))), cell_style),
+                    Paragraph(pdf_text(str(row.get("item_name") or "")), cell_style),
+                    Paragraph(pdf_text(normalize_unit(row.get("unit"))), cell_style),
+                ])
+
+        if not any_rows:
+            data.append([
+                Paragraph(pdf_text(tr("قایمە بەتاڵە", "القائمة فارغة", "The invoice is empty")), cell_style),
+                "", ""
+            ])
+
+        table = Table(data, colWidths=[doc.width * .20, doc.width * .55, doc.width * .25], repeatRows=1)
+        ts = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf4ee")),
+            ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#aeb9b0")),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#89958d")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]
+        row_idx = 1
+        for key, label in category_order:
+            if grouped.get(key):
+                ts += [
+                    ("SPAN", (0, row_idx), (-1, row_idx)),
+                    ("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#e8f0e9")),
+                ]
+                row_idx += 1 + len(grouped[key])
+        table.setStyle(TableStyle(ts))
+        story.append(KeepTogether(table))
         story.append(Spacer(1, 5))
+        story.append(Paragraph(
+            pdf_text(tr("کۆی بابەتەکان: " + str(len(orders)), "إجمالي المواد: " + str(len(orders)), "Total items: " + str(len(orders)))),
+            footer_style,
+        ))
 
-        # Only non-empty categories are included in the Qayma.
-        category_specs = [
-            ("مواد معمل", "مەعمەل", "Factory Materials"),
-            ("مواد مخزن", "مەغزەن", "Warehouse Materials"),
-            ("فێقی", "فێقی", "Fiq"),
-        ]
-        non_empty = [
-            (title, key, english_title, grouped.get(key, []))
-            for title, key, english_title in category_specs
-            if grouped.get(key, [])
-        ]
-
-        # Put all non-empty categories side-by-side. This keeps the complete
-        # invoice compact and bound together on one Landscape A4 page.
-        if non_empty:
-            usable_w = doc.width
-            gap = 7
-            n = len(non_empty)
-            col_w = (usable_w - gap * (n - 1)) / n
-            cells = []
-
-            for title, key, english_title, rows in non_empty:
-                data = [[
-                    Paragraph(pdf_tri("عدد", "العدد", "Quantity"), head_style),
-                    Paragraph(pdf_tri("ماددە", "مادة", "Item"), head_style),
-                    Paragraph(pdf_tri("وحدە", "وحدة", "Unit"), head_style),
-                ]]
-
-                for row in rows:
-                    data.append([
-                        Paragraph(pdf_text(fmt_qty(row.get("quantity", ""))), cell_style),
-                        Paragraph(pdf_text(str(row.get("item_name") or "")), cell_style),
-                        Paragraph(pdf_text(arabic_unit(row.get("unit"))), cell_style),
-                    ])
-
-                inner = Table(
-                    data,
-                    colWidths=[col_w * 0.20, col_w * 0.56, col_w * 0.24],
-                    repeatRows=1,
-                )
-                inner.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf4ee")),
-                    ("GRID", (0, 0), (-1, -1), 0.38, colors.HexColor("#aeb9b0")),
-                    ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#8e9b91")),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-                    ("TOPPADDING", (0, 0), (-1, -1), 2.0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2.0),
-                ]))
-
-                cell = Table(
-                    [[Paragraph(pdf_tri(title if key != "فێقی" else "فێقی",
-                                         "مواد معمل" if key == "مەعمەل" else ("مواد مخزن" if key == "مەغزەن" else "فێقي"),
-                                         english_title), section_style)], [inner]],
-                    colWidths=[col_w],
-                )
-                cell.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8f0e9")),
-                    ("BOX", (0, 0), (-1, -1), 0.65, colors.HexColor("#9cab9e")),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-                    ("TOPPADDING", (0, 0), (-1, -1), 1.5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
-                ]))
-                cells.append(cell)
-
-            category_row = Table(
-                [cells],
-                colWidths=[col_w] * n,
-                hAlign="CENTER",
-            )
-            category_row.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), gap / 2),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]))
-            # Keep the invoice tables and their summary together so the
-            # layout does not scatter across pages.
-            summary = Paragraph(
-                pdf_tri(
-                    "کۆی بابەتەکان: " + str(len(orders)),
-                    "إجمالي المواد: " + str(len(orders)),
-                    "Total Items: " + str(len(orders)),
-                ),
-                footer_style,
-            )
-            story.append(KeepTogether([category_row, Spacer(1, 3), summary]))
-        else:
-            story.append(
-                Paragraph(
-                    pdf_tri(
-                        "کۆی بابەتەکان: " + str(len(orders)),
-                        "إجمالي المواد: " + str(len(orders)),
-                        "Total Items: " + str(len(orders)),
-                    ),
-                    footer_style,
-                )
-            )
-
-        # -----------------------------------------------------
-        # Watermark: very light logo, centered behind the invoice.
-        # -----------------------------------------------------
         def draw_watermark(canvas, doc_obj):
             canvas.saveState()
             try:
                 if os.path.exists(logo_path):
                     img = ImageReader(logo_path)
                     iw, ih = img.getSize()
-                    target_w = 300
-                    target_h = target_w * ih / float(iw) if iw else 300
-                    page_w, page_h = page_size
-                    x = (page_w - target_w) / 2
-                    y = (page_h - target_h) / 2 - 4
+                    target_w = 260
+                    target_h = target_w * ih / float(iw) if iw else 260
+                    page_w, page_h = A4
                     if hasattr(canvas, "setFillAlpha"):
                         canvas.setFillAlpha(0.035)
                     canvas.drawImage(
-                        img,
-                        x,
-                        y,
-                        width=target_w,
-                        height=target_h,
-                        mask="auto",
+                        img, (page_w-target_w)/2, (page_h-target_h)/2,
+                        width=target_w, height=target_h, mask="auto",
                         preserveAspectRatio=True,
                     )
                     if hasattr(canvas, "setFillAlpha"):
@@ -2749,12 +2608,7 @@ def download_pdf():
                 pass
             canvas.restoreState()
 
-        doc.build(
-            story,
-            onFirstPage=draw_watermark,
-            onLaterPages=draw_watermark,
-        )
-
+        doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
         return send_file(filename, as_attachment=True)
 
     except Exception as e:
