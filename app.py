@@ -22,135 +22,6 @@ app.secret_key = os.environ.get(
 DB_NAME = "clean_qayma.db"
 SHARED_PASSWORD = os.environ.get("ORGANIC_PASSWORD", "organic123")
 
-# =========================================================
-# LANGUAGES
-# =========================================================
-LANGUAGE_CHOICES = {
-    "ku": "کوردی سۆرانی",
-    "ar": "العربية",
-    "en": "English",
-}
-
-LANG_TEXT = {
-    "ku": {
-        "settings": "سێتینگی سیستەم", "back": "گەڕانەوە", "add_item": "زیادکردنی بابەتی نوێ",
-        "section": "بەش", "item_name": "ناوی بابەت", "unit": "یەکە", "save": "پاشەکەوتکردن",
-        "all_items": "لیستی هەموو بابەتەکان", "actions": "کردار", "edit": "دەستکاریکردن", "delete": "سڕینەوە",
-        "language": "زمانی بەرنامە", "language_saved": "زمان بە سەرکەوتوویی گۆڕدرا",
-        "note": "تێبینی قایمە", "save_note": "تومارکردنی تێبینی", "search": "گەڕان بۆ بابەت...",
-        "download_pdf": "دروستکردنی PDF", "clear": "پاککردنەوەی قایمە", "logout": "چوونەدەرەوە",
-        "login_title": "سیستەمی قایمەی کۆمپانیا", "password": "ڕەمزی چوونەژوورەوە", "login": "چوونەژوورەوە",
-        "qayma": "قایمە", "location": "شوێن", "phone": "مۆبایل", "date": "بەروار",
-        "total": "کۆی بابەتەکان", "category_factory": "مواد معمل", "category_warehouse": "مواد مخزن",
-        "category_fiq": "فێقی", "qty": "عدد", "material": "ماددە", "unit_header": "وحدە",
-        "piece": "دانە", "kilo": "کیلۆ", "carton": "کارتۆن", "liter": "لیتر", "box": "بۆکس",
-    },
-    "ar": {
-        "settings": "إعدادات النظام", "back": "رجوع", "add_item": "إضافة مادة جديدة",
-        "section": "القسم", "item_name": "اسم المادة", "unit": "الوحدة", "save": "حفظ",
-        "all_items": "قائمة جميع المواد", "actions": "الإجراءات", "edit": "تعديل", "delete": "حذف",
-        "language": "لغة البرنامج", "language_saved": "تم تغيير اللغة بنجاح",
-        "note": "ملاحظة القائمة", "save_note": "حفظ الملاحظة", "search": "البحث عن مادة...",
-        "download_pdf": "إنشاء PDF", "clear": "مسح القائمة", "logout": "تسجيل الخروج",
-        "login_title": "نظام قائمة الشركة", "password": "كلمة المرور", "login": "تسجيل الدخول",
-        "qayma": "القائمة", "location": "الموقع", "phone": "الهاتف", "date": "التاريخ",
-        "total": "إجمالي المواد", "category_factory": "مواد معمل", "category_warehouse": "مواد مخزن",
-        "category_fiq": "الفواكه", "qty": "العدد", "material": "المادة", "unit_header": "الوحدة",
-        "piece": "قطعة", "kilo": "كغم", "carton": "كرتون", "liter": "لتر", "box": "علبة",
-    },
-    "en": {
-        "settings": "System Settings", "back": "Back", "add_item": "Add New Item",
-        "section": "Section", "item_name": "Item Name", "unit": "Unit", "save": "Save",
-        "all_items": "All Items", "actions": "Actions", "edit": "Edit", "delete": "Delete",
-        "language": "Application Language", "language_saved": "Language changed successfully",
-        "note": "Qayma Note", "save_note": "Save Note", "search": "Search items...",
-        "download_pdf": "Create PDF", "clear": "Clear Qayma", "logout": "Logout",
-        "login_title": "Company Qayma System", "password": "Password", "login": "Login",
-        "qayma": "Qayma", "location": "Location", "phone": "Phone", "date": "Date",
-        "total": "Total Items", "category_factory": "Factory Materials", "category_warehouse": "Warehouse Materials",
-        "category_fiq": "Fruits", "qty": "Quantity", "material": "Item", "unit_header": "Unit",
-        "piece": "Piece", "kilo": "Kilo", "carton": "Carton", "liter": "Liter", "box": "Box",
-    }
-}
-
-def get_language():
-    try:
-        conn = get_db()
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(company_info)").fetchall()]
-        if "language" in cols:
-            row = conn.execute("SELECT language FROM company_info WHERE id=1").fetchone()
-            conn.close()
-            lang = row["language"] if row and row["language"] in LANGUAGE_CHOICES else "ku"
-            return lang
-        conn.close()
-    except Exception:
-        pass
-    return "ku"
-
-def tr(key, lang=None):
-    lang = lang or get_language()
-    return LANG_TEXT.get(lang, LANG_TEXT["ku"]).get(key, LANG_TEXT["ku"].get(key, key))
-
-def language_direction(lang=None):
-    return "rtl" if (lang or get_language()) in ("ku", "ar") else "ltr"
-
-
-CATEGORY_TEXT = {
-    "ku": {"فێقی":"فێقی", "مەعمەل":"مواد معمل", "مەغزەن":"مواد مخزن"},
-    "ar": {"فێقی":"الفواكه", "مەعمەل":"مواد معمل", "مەغزەن":"مواد مخزن"},
-    "en": {"فێقی":"Fruits", "مەعمەل":"Factory Materials", "مەغزەن":"Warehouse Materials"},
-}
-
-def category_label(category, lang=None):
-    lang = lang or get_language()
-    return CATEGORY_TEXT.get(lang, CATEGORY_TEXT["ku"]).get(str(category), str(category))
-
-def localize_template(template, lang=None):
-    """Translate static UI labels while preserving Jinja variables and user data."""
-    lang = lang or get_language()
-    if lang == "ku":
-        return template
-    common = {
-        "سێتینگی سیستەم": {"ar":"إعدادات النظام","en":"System Settings"},
-        "گەڕانەوە": {"ar":"رجوع","en":"Back"},
-        "زیادکردنی بابەتی نوێ": {"ar":"إضافة مادة جديدة","en":"Add New Item"},
-        "ناوی بابەت": {"ar":"اسم المادة","en":"Item Name"},
-        "یەکە": {"ar":"الوحدة","en":"Unit"},
-        "تومارکردن": {"ar":"حفظ","en":"Save"},
-        "لیستی هەموو بابەتەکان": {"ar":"قائمة جميع المواد","en":"All Items"},
-        "کردار": {"ar":"الإجراءات","en":"Actions"},
-        "Edit": {"ar":"تعديل","en":"Edit"},
-        "Delete": {"ar":"حذف","en":"Delete"},
-        "سێتینگ": {"ar":"الإعدادات","en":"Settings"},
-        "گەڕان بۆ بابەت...": {"ar":"البحث عن مادة...","en":"Search items..."},
-        "تێبینی قایمە": {"ar":"ملاحظة القائمة","en":"Qayma Note"},
-        "تێبینی خۆت لێرە بنووسە...": {"ar":"اكتب ملاحظتك هنا...","en":"Write your note here..."},
-        "تومارکردنی تێبینی": {"ar":"حفظ الملاحظة","en":"Save Note"},
-        "دروستکردنی PDF": {"ar":"إنشاء PDF","en":"Create PDF"},
-        "پاککردنەوەی قایمە": {"ar":"مسح القائمة","en":"Clear Qayma"},
-        "چوونەدەرەوە": {"ar":"تسجيل الخروج","en":"Logout"},
-        "چوونەژوورەوە": {"ar":"تسجيل الدخول","en":"Login"},
-        "سیستەمی قایمەی کۆمپانیا": {"ar":"نظام قائمة الشركة","en":"Company Qayma System"},
-        "ڕەمزی چوونەژوورەوە": {"ar":"كلمة المرور","en":"Password"},
-        "دەستکاریکردنی بابەت": {"ar":"تعديل المادة","en":"Edit Item"},
-        "پاشەکەوتکردن": {"ar":"حفظ التغييرات","en":"Save Changes"},
-        "گەڕانەوە بۆ سێتینگ": {"ar":"الرجوع إلى الإعدادات","en":"Back to Settings"},
-        "کۆمپانییا ئۆرگانیک جویس": {"ar":"أورغانيك جوس","en":"ORGANIC JUICES"},
-        "بەش": {"ar":"القسم","en":"Section"},
-        "ناو": {"ar":"الاسم","en":"Name"},
-        "هەموو بابەتەکان": {"ar":"جميع المواد","en":"All Items"},
-        "پیتەکە": {"ar":"الوحدة","en":"Unit"},
-        "قایمە": {"ar":"القائمة","en":"Qayma"},
-        "شوێن": {"ar":"الموقع","en":"Location"},
-        "مۆبایل": {"ar":"الهاتف","en":"Phone"},
-        "بەروار": {"ar":"التاريخ","en":"Date"},
-    }
-    out = template
-    for src, vals in common.items():
-        out = out.replace(src, vals.get(lang, src))
-    return out
-
-
 
 # =========================================================
 # DATABASE
@@ -214,11 +85,6 @@ def init_db():
         INSERT OR IGNORE INTO company_info (id, location, phone)
         VALUES (1, 'پارکا شەهیدا', '07500113334')
     """)
-
-    # Language setting (shared by the application and PDF).
-    cols = [r[1] for r in c.execute("PRAGMA table_info(company_info)").fetchall()]
-    if "language" not in cols:
-        c.execute("ALTER TABLE company_info ADD COLUMN language TEXT NOT NULL DEFAULT 'ku'")
 
     # -----------------------------------------------------
     # Categories
@@ -350,6 +216,106 @@ def logged_in():
     return session.get("authenticated") is True
 
 
+# =========================================================
+# LANGUAGE / I18N
+# =========================================================
+
+SUPPORTED_LANGUAGES = {
+    "ku": "کوردی بادینی",
+    "ar": "العربية",
+    "en": "English",
+}
+
+TRANSLATIONS = {
+    "ku": {
+        "login_title": "سیستەمی قایمەی کۆمپانیا",
+        "password": "ڕەمزی چوونەژوورەوە", "login": "چوونەژوورەوە", "wrong_password": "ڕەمز هەڵەیە",
+        "settings": "سێتینگ", "logout": "خروج", "search": "گەڕان بۆ بابەت...",
+        "note_title": "تێبینی قایمە", "note_placeholder": "تێبینی خۆت لێرە بنووسە...", "save": "پاشەکەوتکردن",
+        "registered": "تومارکردنی تێبینی", "unit": "یەکە", "add": "زێدە", "invoice": "قایمە",
+        "section": "بەش", "item": "بابەت", "qty": "بڕ", "action": "کردار",
+        "pdf": "دروستکردنی PDF", "clear": "پاککردنی هەموو قایمە", "count": "بابەت",
+        "materials_factory": "مواد معمل", "materials_warehouse": "مواد مخزن", "fiqi": "فێقی",
+        "system_settings": "سێتینگی سیستەم", "back": "گەڕانەوە", "add_new": "زیادکردنی بابەتی نوێ",
+        "item_name": "ناوی بابەت", "item_name_placeholder": "ناوی بابەت",
+        "unit_placeholder": "کیلو / دانە / کارتۆن...", "all_items": "لیستی هەموو بابەتەکان",
+        "edit": "دەستکاری", "delete": "سڕینەوە", "sure": "دڵنیایت؟",
+        "language": "زمانی سیستەم", "language_help": "زمان هەڵبژێرە؛ هەموو ڕووکاری سیستەم و PDF بەو زمانە دەردەکەوێت.",
+        "company_info": "زانیاری کۆمپانیا", "location": "شوێن", "phone": "مۆبایل",
+        "save_company": "پاشەکەوتکردنی زانیاری کۆمپانیا", "language_saved": "زمان بە سەرکەوتوویی گۆڕدرا",
+        "note_saved": "تێبینی بە سەرکەوتوویی هەڵگیرا", "server_error": "پەیوەندی بە سێرڤەرەوە نەکرا",
+        "error": "هەڵەیەک ڕوویدا", "delete_question": "ئەم بابەتە لە قایمە بسڕینەوە؟",
+        "clear_question": "دڵنیایت دەتەوێت هەموو قایمە پاک بکەیتەوە؟", "natural": "100% Natural",
+    },
+    "ar": {
+        "login_title": "نظام قائمة الشركة", "password": "كلمة المرور", "login": "تسجيل الدخول", "wrong_password": "كلمة المرور غير صحيحة",
+        "settings": "الإعدادات", "logout": "خروج", "search": "البحث عن مادة...", "note_title": "ملاحظة القائمة",
+        "note_placeholder": "اكتب ملاحظتك هنا...", "save": "حفظ", "registered": "حفظ الملاحظة", "unit": "الوحدة",
+        "add": "إضافة", "invoice": "القائمة", "section": "القسم", "item": "المادة", "qty": "العدد", "action": "الإجراء",
+        "pdf": "إنشاء PDF", "clear": "مسح القائمة بالكامل", "count": "مادة", "materials_factory": "مواد معمل",
+        "materials_warehouse": "مواد مخزن", "fiqi": "فێقی", "system_settings": "إعدادات النظام", "back": "رجوع",
+        "add_new": "إضافة مادة جديدة", "item_name": "اسم المادة", "item_name_placeholder": "اسم المادة",
+        "unit_placeholder": "كيلو / قطعة / كارتون...", "all_items": "قائمة جميع المواد", "edit": "تعديل", "delete": "حذف", "sure": "هل أنت متأكد؟",
+        "language": "لغة النظام", "language_help": "اختر اللغة؛ ستظهر واجهة النظام وملف PDF باللغة المختارة.",
+        "company_info": "معلومات الشركة", "location": "الموقع", "phone": "الهاتف", "save_company": "حفظ معلومات الشركة",
+        "language_saved": "تم تغيير اللغة بنجاح", "note_saved": "تم حفظ الملاحظة بنجاح", "server_error": "تعذر الاتصال بالخادم",
+        "error": "حدث خطأ", "delete_question": "هل تريد حذف هذه المادة من القائمة؟", "clear_question": "هل أنت متأكد من مسح القائمة بالكامل؟", "natural": "100% Natural",
+    },
+    "en": {
+        "login_title": "Company Qayma System", "password": "Password", "login": "Log in", "wrong_password": "Incorrect password",
+        "settings": "Settings", "logout": "Log out", "search": "Search for an item...", "note_title": "Qayma Note",
+        "note_placeholder": "Write your note here...", "save": "Save", "registered": "Save Note", "unit": "Unit",
+        "add": "Add", "invoice": "Qayma", "section": "Section", "item": "Item", "qty": "Quantity", "action": "Action",
+        "pdf": "Create PDF", "clear": "Clear All Qayma", "count": "items", "materials_factory": "Factory Materials",
+        "materials_warehouse": "Warehouse Materials", "fiqi": "Fêqî", "system_settings": "System Settings", "back": "Back",
+        "add_new": "Add New Item", "item_name": "Item Name", "item_name_placeholder": "Item name",
+        "unit_placeholder": "Kilo / Piece / Carton...", "all_items": "All Items", "edit": "Edit", "delete": "Delete", "sure": "Are you sure?",
+        "language": "System Language", "language_help": "Choose a language; the system interface and PDF will use the selected language.",
+        "company_info": "Company Information", "location": "Location", "phone": "Phone", "save_company": "Save Company Information",
+        "language_saved": "Language changed successfully", "note_saved": "Note saved successfully", "server_error": "Could not connect to server",
+        "error": "An error occurred", "delete_question": "Delete this item from the Qayma?", "clear_question": "Are you sure you want to clear the entire Qayma?", "natural": "100% Natural",
+    },
+}
+
+def get_language():
+    lang = session.get("language", "ku")
+    return lang if lang in SUPPORTED_LANGUAGES else "ku"
+
+def tr(key, lang=None):
+    lang = lang or get_language()
+    return TRANSLATIONS.get(lang, TRANSLATIONS["ku"]).get(key, TRANSLATIONS["ku"].get(key, key))
+
+def html_direction(lang):
+    return "ltr" if lang == "en" else "rtl"
+
+def category_label(category, lang=None):
+    lang = lang or get_language()
+    mapping = {
+        "ku": {"مەعمەل": "مەعمەل", "مەغزەن": "مەغزەن", "فێقی": "فێقی"},
+        "ar": {"مەعمەل": "مواد معمل", "مەغزەن": "مواد مخزن", "فێقی": "فێقی"},
+        "en": {"مەعمەل": "Factory Materials", "مەغزەن": "Warehouse Materials", "فێقی": "Fêqî"},
+    }
+    return mapping.get(lang, mapping["ku"]).get(str(category), str(category))
+
+def unit_label(unit, lang=None):
+    lang = lang or get_language()
+    u = str(unit or "").strip().lower()
+    base = {
+        "دانە": "piece", "دانه": "piece", "دانة": "piece", "قطعة": "piece", "قطعه": "piece",
+        "کیلو": "kilo", "كيلو": "kilo", "كێلو": "kilo", "کێلو": "kilo", "کغم": "kilo", "كغم": "kilo", "kg": "kilo",
+        "کارتۆن": "carton", "كارتون": "carton", "کارتن": "carton", "carton": "carton",
+        "لیتر": "litre", "ليتر": "litre", "l": "litre", "liter": "litre", "litre": "litre",
+        "بۆکس": "box", "بوكس": "box", "box": "box",
+        "لبان": "piece",
+    }.get(u, str(unit or ""))
+    values = {
+        "ku": {"piece": "دانە", "kilo": "کێلو", "carton": "کارتۆن", "litre": "لتر", "box": "بۆکس"},
+        "ar": {"piece": "قطعة", "kilo": "كيلو", "carton": "كارتون", "litre": "لتر", "box": "علبة"},
+        "en": {"piece": "Piece", "kilo": "Kilo", "carton": "Carton", "litre": "Litre", "box": "Box"},
+    }
+    return values.get(lang, values["ku"]).get(base, base)
+
+
 def get_note(device_id):
 
     conn = get_db()
@@ -384,7 +350,9 @@ def get_orders(device_id):
             "item_name": r["item_name"],
             "quantity": r["quantity"],
             "unit": r["unit"],
+            "unit_display": unit_label(r["unit"]),
             "category": r["category"],
+            "category_display": category_label(r["category"]),
             "created_at": r["created_at"]
         }
         for r in rows
@@ -454,7 +422,7 @@ def get_all_items():
 LOGIN_TEMPLATE = """
 
 <!DOCTYPE html>
-<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
+<html lang="{{ lang }}" dir="{{ direction }}">
 
 <head>
 
@@ -558,7 +526,7 @@ onerror="this.style.display='none'">
 <h1>ئۆرگانیک جویس</h1>
 
 <div class="subtitle">
-سیستەمی قایمەی کۆمپانیا
+{{ t("login_title") }}
 </div>
 
 {% if error %}
@@ -570,7 +538,7 @@ onerror="this.style.display='none'">
 <input
 type="password"
 name="password"
-placeholder="ڕەمزی چوونەژوورەوە"
+placeholder="{{ t("password") }}"
 required
 autofocus>
 
@@ -582,20 +550,6 @@ autofocus>
 
 </div>
 
-<script>
-(function(){
-const lang=document.documentElement.lang||"ku";
-const D={
-ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
-ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
-en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
-const map=D[lang]||D.ku;
-const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
-const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
-nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
-document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
-})();
-</script>
 </body>
 </html>
 
@@ -610,7 +564,7 @@ HTML_TEMPLATE = """
 
 <!DOCTYPE html>
 
-<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
+<html lang="{{ lang }}" dir="{{ direction }}">
 
 <head>
 
@@ -1006,12 +960,12 @@ onerror="this.style.display='none'">
 
 <a class="action settings"
 href="/settings">
-⚙️ سێتینگ
+⚙️ {{ t("settings") }}
 </a>
 
 <a class="action logout"
 href="/logout">
-خروج
+{{ t("logout") }}
 </a>
 
 </div>
@@ -1026,7 +980,7 @@ href="/logout">
 <input
 id="search"
 type="search"
-placeholder="🔎 گەڕان بۆ بابەت..."
+placeholder="🔎 {{ t("search") }}"
 value="{{ search }}"
 oninput="searchItems()">
 
@@ -1037,15 +991,15 @@ oninput="searchItems()">
 
 <div class="note">
 
-<strong>📝 تێبینی قایمە</strong>
+<strong>📝 {{ t("note_title") }}</strong>
 
 <textarea
 id="noteInput"
-placeholder="تێبینی خۆت لێرە بنووسە..."
+placeholder="{{ t("note_placeholder") }}"
 >{{ current_note }}</textarea>
 
 <button onclick="saveNote()">
-💾 تومارکردنی تێبینی
+💾 {{ t("registered") }}
 </button>
 
 </div>
@@ -1057,10 +1011,10 @@ placeholder="تێبینی خۆت لێرە بنووسە..."
 
 <section
 class="category"
-data-category="{{ category_label(category) }}">
+data-category="{{ category }}">
 
 <div class="category-title">
-🔸 {{ category_label(category) }}
+🔸 {{ category_label(category, lang) }}
 </div>
 
 <div class="grid">
@@ -1076,7 +1030,7 @@ data-name="{{ item.name|lower }}">
 </div>
 
 <div class="unit">
-یەکە: {{ item.unit }}
+{{ t("unit") }}: {{ unit_label(item.unit, lang) }}
 </div>
 
 <div class="controls">
@@ -1105,7 +1059,7 @@ class="add"
 data-id="{{ item.id }}"
 data-name="{{ item.name }}"
 data-unit="{{ item.unit }}"
-data-category="{{ category_label(category) }}"
+data-category="{{ category }}"
 onclick="addItem(this)">
 زێدە
 </button>
@@ -1134,11 +1088,11 @@ style="{% if orders %}{% else %}display:none{% endif %}">
 
 <div class="summary-header">
 
-<h2>📋 قایمە</h2>
+<h2>📋 {{ t("invoice") }}</h2>
 
 <span class="count"
 id="orderCount">
-{{ orders|length }} بابەت
+{{ orders|length }} {{ t("count") }}
 </span>
 
 </div>
@@ -1150,11 +1104,11 @@ id="orderCount">
 <thead>
 
 <tr>
-<th>بەش</th>
-<th>بابەت</th>
-<th>بڕ</th>
-<th>یەکە</th>
-<th>کردار</th>
+<th>{{ t("section") }}</th>
+<th>{{ t("item") }}</th>
+<th>{{ t("qty") }}</th>
+<th>{{ t("unit") }}</th>
+<th>{{ t("action") }}</th>
 </tr>
 
 </thead>
@@ -1165,13 +1119,13 @@ id="orderCount">
 
 <tr>
 
-<td>{{ order.category }}</td>
+<td>{{ order.category_display }}</td>
 
 <td><b>{{ order.item_name }}</b></td>
 
 <td>{{ order.quantity }}</td>
 
-<td>{{ order.unit }}</td>
+<td>{{ order.unit_display }}</td>
 
 <td>
 <button
@@ -1195,7 +1149,7 @@ onclick="deleteOrder({{ order.id }})">
 class="pdf"
 onclick="downloadPDF()">
 
-📄 دروستکردنی PDF
+📄 {{ t("pdf") }}
 
 </button>
 
@@ -1203,7 +1157,7 @@ onclick="downloadPDF()">
 class="clear"
 onclick="clearOrders()">
 
-🗑️ پاککردنی هەموو قایمە
+🗑️ {{ t("clear") }}
 
 </button>
 
@@ -1286,19 +1240,19 @@ async function addItem(button){
 
         }else{
 
-            alert(data.message || "هەڵەیەک ڕوویدا");
+            alert(data.message || "{{ t("error") }}");
 
         }
 
     }catch(error){
 
-        alert("پەیوەندی بە سێرڤەرەوە نەکرا");
+        alert("{{ t("server_error") }}");
 
     }
 
     setTimeout(()=>{
         button.disabled=false;
-        button.innerText="زێدە";
+        button.innerText="{{ t("add") }}";
     },400);
 
 }
@@ -1319,7 +1273,7 @@ function updateOrders(orders){
 
         summary.style.display="none";
         body.innerHTML="";
-        count.innerText="0 بابەت";
+        count.innerText="0 {{ t("count") }}";
 
         return;
     }
@@ -1327,20 +1281,20 @@ function updateOrders(orders){
     summary.style.display="block";
 
     count.innerText =
-        orders.length + " بابەت";
+        orders.length + " {{ t("count") }}";
 
     body.innerHTML =
         orders.map(o => `
 
         <tr>
 
-        <td>${escapeHTML(o.category)}</td>
+        <td>${escapeHTML(o.category_display || o.category)}</td>
 
         <td><b>${escapeHTML(o.item_name)}</b></td>
 
         <td>${o.quantity}</td>
 
-        <td>${escapeHTML(o.unit)}</td>
+        <td>${escapeHTML(o.unit_display || o.unit)}</td>
 
         <td>
 
@@ -1363,7 +1317,7 @@ function updateOrders(orders){
 
 async function deleteOrder(id){
 
-    if(!confirm("ئەم بابەتە لە قایمە بسڕینەوە؟"))
+    if(!confirm("{{ t("delete_question") }}"))
         return;
 
     const response =
@@ -1386,7 +1340,7 @@ async function deleteOrder(id){
 async function clearOrders(){
 
     if(!confirm(
-        "دڵنیایت دەتەوێت هەموو قایمە پاک بکەیتەوە؟"
+        "{{ t("clear_question") }}"
     ))
         return;
 
@@ -1427,7 +1381,7 @@ async function saveNote(){
         await response.json();
 
     if(data.status === "success")
-        alert("✓ تێبینی بە سەرکەوتوویی هەڵگیرا");
+        alert("✓ {{ t("note_saved") }}");
 
 }
 
@@ -1495,20 +1449,6 @@ function escapeHTML(value){
 
 </script>
 
-<script>
-(function(){
-const lang=document.documentElement.lang||"ku";
-const D={
-ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
-ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
-en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
-const map=D[lang]||D.ku;
-const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
-const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
-nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
-document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
-})();
-</script>
 </body>
 </html>
 
@@ -1524,12 +1464,6 @@ def get_company_info():
     return "پارکا شەهیدا", "07500113334"
 
 
-
-@app.context_processor
-def inject_language_helpers():
-    lang = get_language()
-    return {"category_label": lambda value: category_label(value, lang)}
-
 # =========================================================
 # SETTINGS
 # =========================================================
@@ -1538,7 +1472,7 @@ SETTINGS_TEMPLATE = """
 
 <!DOCTYPE html>
 
-<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
+<html lang="{{ lang }}" dir="{{ direction }}">
 
 <head>
 
@@ -1547,7 +1481,7 @@ SETTINGS_TEMPLATE = """
 <meta name="viewport"
 content="width=device-width,initial-scale=1">
 
-<title>سێتینگ | Organic Juices</title>
+<title>Organic Juices | {{ t("settings") }}</title>
 
 <style>
 
@@ -1667,62 +1601,66 @@ th{
 
 <div class="header">
 
-<h2>⚙️ سێتینگی سیستەم</h2>
+<h2>⚙️ {{ t("system_settings") }}</h2>
 
 <a class="back" href="/">
-⬅️ گەڕانەوە
+⬅️ {{ t("back") }}
 </a>
 
 </div>
 
+
 <div class="card">
-<h3>🌐 زمانی بەرنامە / Application Language / لغة البرنامج</h3>
+<h3>🌐 {{ t("language") }}</h3>
+<p style="color:#666;font-size:13px">{{ t("language_help") }}</p>
 <form method="POST" action="/set_language">
+<input type="hidden" name="next" value="/settings">
 <select name="language" onchange="this.form.submit()">
-<option value="ku" {% if language == "ku" %}selected{% endif %}>کوردی سۆرانی</option>
-<option value="ar" {% if language == "ar" %}selected{% endif %}>العربية</option>
-<option value="en" {% if language == "en" %}selected{% endif %}>English</option>
+{% for code, name in languages.items() %}
+<option value="{{ code }}" {% if lang == code %}selected{% endif %}>{{ name }}</option>
+{% endfor %}
 </select>
 </form>
 </div>
 
+
 <div class="card">
 
-<h3>➕ زیادکردنی بابەتی نوێ</h3>
+<h3>➕ {{ t("add_new") }}</h3>
 
 <form method="POST"
 action="/add_item_setting">
 
-<label>بەش</label>
+<label>{{ t("section") }}</label>
 
 <select name="category">
 
 {% for cat in categories %}
 
-<option value="{{ category_label(cat) }}">
-{{ category_label(cat) }}
+<option value="{{ cat }}">
+{{ cat }}
 </option>
 
 {% endfor %}
 
 </select>
 
-<label>ناوی بابەت</label>
+<label>{{ t("item_name") }}</label>
 
 <input
 name="item_name"
-placeholder="ناوی بابەت"
+placeholder="{{ t("item_name_placeholder") }}"
 required>
 
-<label>یەکە</label>
+<label>{{ t("unit") }}</label>
 
 <input
 name="unit"
-placeholder="کیلو / دانە / کارتۆن..."
+placeholder="{{ t("unit_placeholder") }}"
 required>
 
 <button>
-💾 تومارکردن
+💾 {{ t("save") }}
 </button>
 
 </form>
@@ -1731,9 +1669,21 @@ required>
 
 
 <div class="card">
+<h3>🏢 {{ t("company_info") }}</h3>
+<form method="POST" action="/save_company_info">
+<label>{{ t("location") }}</label>
+<input name="location" value="{{ location }}" required>
+<label>{{ t("phone") }}</label>
+<input name="phone" value="{{ phone }}" required>
+<button>💾 {{ t("save_company") }}</button>
+</form>
+</div>
+
+
+<div class="card">
 
 <h3>
-📋 لیستی هەموو بابەتەکان
+📋 {{ t("all_items") }}
 </h3>
 
 <div class="table-wrap">
@@ -1745,10 +1695,10 @@ required>
 <tr>
 
 <th>#</th>
-<th>بەش</th>
-<th>ناو</th>
-<th>یەکە</th>
-<th>کردار</th>
+<th>{{ t("section") }}</th>
+<th>{{ t("item_name") }}</th>
+<th>{{ t("unit") }}</th>
+<th>{{ t("action") }}</th>
 
 </tr>
 
@@ -1762,11 +1712,11 @@ required>
 
 <td>{{ item.id }}</td>
 
-<td>{{ category_label(item.category) }}</td>
+<td>{{ category_label(item.category, lang) }}</td>
 
 <td><b>{{ item.item_name }}</b></td>
 
-<td>{{ item.unit }}</td>
+<td>{{ unit_label(item.unit, lang) }}</td>
 
 <td>
 
@@ -1775,14 +1725,14 @@ required>
 <a
 class="edit"
 href="/edit_item/{{ item.id }}">
-✏️ Edit
+✏️ {{ t("edit") }}
 </a>
 
 <a
 class="delete"
 href="/delete_item_setting/{{ item.id }}"
-onclick="return confirm('دڵنیایت؟')">
-🗑️ Delete
+onclick="return confirm('{{ t("sure") }}')">
+🗑️ {{ t("delete") }}
 </a>
 
 </div>
@@ -1803,20 +1753,6 @@ onclick="return confirm('دڵنیایت؟')">
 
 </div>
 
-<script>
-(function(){
-const lang=document.documentElement.lang||"ku";
-const D={
-ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
-ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
-en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
-const map=D[lang]||D.ku;
-const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
-const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
-nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
-document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
-})();
-</script>
 </body>
 </html>
 
@@ -1831,7 +1767,7 @@ EDIT_TEMPLATE = """
 
 <!DOCTYPE html>
 
-<html lang="{{ language }}" dir="{{ 'rtl' if language != 'en' else 'ltr' }}">
+<html lang="{{ lang }}" dir="{{ direction }}">
 
 <head>
 
@@ -1840,7 +1776,7 @@ EDIT_TEMPLATE = """
 <meta name="viewport"
 content="width=device-width,initial-scale=1">
 
-<title>Edit Item</title>
+<title>Organic Juices | {{ t("edit") }}</title>
 
 <style>
 
@@ -1898,23 +1834,23 @@ button{
 
 <div class="card">
 
-<h2>✏️ دەستکاریکردنی بابەت</h2>
+<h2>✏️ {{ t("edit") }} {{ t("item") }}</h2>
 
 <form method="POST">
 
-<label>بەش</label>
+<label>{{ t("section") }}</label>
 
 <select name="category">
 
 {% for cat in categories %}
 
 <option
-value="{{ category_label(cat) }}"
+value="{{ cat }}"
 {% if item.category == cat %}
 selected
 {% endif %}>
 
-{{ category_label(cat) }}
+{{ cat }}
 
 </option>
 
@@ -1922,14 +1858,14 @@ selected
 
 </select>
 
-<label>ناوی بابەت</label>
+<label>{{ t("item_name") }}</label>
 
 <input
 name="item_name"
 value="{{ item.item_name }}"
 required>
 
-<label>یەکە</label>
+<label>{{ t("unit") }}</label>
 
 <input
 name="unit"
@@ -1937,31 +1873,17 @@ value="{{ item.unit }}"
 required>
 
 <button>
-💾 پاشەکەوتکردن
+💾 {{ t("save") }}
 </button>
 
 </form>
 
 <a class="back" href="/settings">
-⬅️ گەڕانەوە بۆ سێتینگ
+⬅️ {{ t("back") }}
 </a>
 
 </div>
 
-<script>
-(function(){
-const lang=document.documentElement.lang||"ku";
-const D={
-ku:{"⚙️ سێتینگی سیستەم":"⚙️ سێتینگی سیستەم","⬅️ گەڕانەوە":"⬅️ گەڕانەوە","➕ زیادکردنی بابەتی نوێ":"➕ زیادکردنی بابەتی نوێ","بەش":"بەش","ناوی بابەت":"ناوی بابەت","یەکە":"یەکە","💾 تومارکردن":"💾 تومارکردن","📋 لیستی هەموو بابەتەکان":"📋 لیستی هەموو بابەتەکان","کردار":"کردار","Edit":"دەستکاریکردن","Delete":"سڕینەوە","⚙️ سێتینگ":"⚙️ سێتینگ","گەڕان بۆ بابەت...":"گەڕان بۆ بابەت...","دروستکردنی PDF":"دروستکردنی PDF","پاککردنەوەی قایمە":"پاککردنەوەی قایمە"},
-ar:{"⚙️ سێتینگی سیستەم":"⚙️ إعدادات النظام","⬅️ گەڕانەوە":"⬅️ رجوع","➕ زیادکردنی بابەتی نوێ":"➕ إضافة مادة جديدة","بەش":"القسم","ناوی بابەت":"اسم المادة","یەکە":"الوحدة","💾 تومارکردن":"💾 حفظ","📋 لیستی هەموو بابەتەکان":"📋 قائمة جميع المواد","کردار":"الإجراءات","Edit":"تعديل","Delete":"حذف","⚙️ سێتینگ":"⚙️ الإعدادات","گەڕان بۆ بابەت...":"البحث عن مادة...","دروستکردنی PDF":"إنشاء PDF","پاککردنەوەی قایمە":"مسح القائمة"},
-en:{"⚙️ سێتینگی سیستەم":"⚙️ System Settings","⬅️ گەڕانەوە":"⬅️ Back","➕ زیادکردنی بابەتی نوێ":"➕ Add New Item","بەش":"Section","ناوی بابەت":"Item Name","یەکە":"Unit","💾 تومارکردن":"💾 Save","📋 لیستی هەموو بابەتەکان":"📋 All Items","کردار":"Actions","Edit":"Edit","Delete":"Delete","⚙️ سێتینگ":"⚙️ Settings","گەڕان بۆ بابەت...":"Search items...","دروستکردنی PDF":"Create PDF","پاککردنەوەی قایمە":"Clear Qayma"}};
-const map=D[lang]||D.ku;
-const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
-const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
-nodes.forEach(n=>{let t=n.nodeValue.trim(); if(map[t]) n.nodeValue=n.nodeValue.replace(t,map[t]);});
-document.querySelectorAll("input[placeholder]").forEach(e=>{if(map[e.placeholder])e.placeholder=map[e.placeholder];});
-})();
-</script>
 </body>
 </html>
 
@@ -1996,11 +1918,22 @@ def login():
 
         error = "❌ ڕەمز هەڵەیە"
 
+    lang = get_language()
     return render_template_string(
-        localize_template(LOGIN_TEMPLATE, get_language()),
-        error=error,
-        language=get_language()
+        LOGIN_TEMPLATE,
+        error=error, lang=lang, direction=html_direction(lang), t=lambda key: tr(key, lang), category_label=category_label, unit_label=unit_label
     )
+
+
+@app.route("/set_language", methods=["POST"])
+def set_language():
+    if not logged_in():
+        return redirect(url_for("login"))
+    lang = request.form.get("language", "ku")
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = "ku"
+    session["language"] = lang
+    return redirect(request.form.get("next") or url_for("index"))
 
 
 @app.route("/logout")
@@ -2025,13 +1958,13 @@ def index():
 
     device_id = get_device_id()
 
+    lang = get_language()
     return render_template_string(
-        localize_template(HTML_TEMPLATE, get_language()),
+        HTML_TEMPLATE,
         all_items=get_items(search),
         orders=get_orders(device_id),
         current_note=get_note(device_id),
-        search=search,
-        language=get_language()
+        search=search, lang=lang, direction=html_direction(lang), t=lambda key: tr(key, lang), category_label=category_label, unit_label=unit_label
     )
 
 
@@ -2247,28 +2180,15 @@ def settings_page():
 
     location, phone = get_company_info()
 
+    lang = get_language()
     return render_template_string(
-        localize_template(SETTINGS_TEMPLATE, get_language()),
+        SETTINGS_TEMPLATE,
         items=get_all_items(),
         categories=categories,
         location=location,
         phone=phone,
-        language=get_language()
+        lang=lang, direction=html_direction(lang), t=lambda key: tr(key, lang), category_label=category_label, unit_label=unit_label, languages=SUPPORTED_LANGUAGES
     )
-
-
-@app.route("/set_language", methods=["POST"])
-def set_language():
-    if not logged_in():
-        return redirect(url_for("login"))
-    lang = request.form.get("language", "ku")
-    if lang not in LANGUAGE_CHOICES:
-        lang = "ku"
-    conn = get_db()
-    conn.execute("UPDATE company_info SET language=? WHERE id=1", (lang,))
-    conn.commit()
-    conn.close()
-    return redirect(request.form.get("next") or url_for("settings_page"))
 
 
 @app.route("/save_company_info", methods=["POST"])
@@ -2438,11 +2358,12 @@ def edit_item(item_id):
 
     conn.close()
 
+    lang = get_language()
     return render_template_string(
-        localize_template(EDIT_TEMPLATE, get_language()),
+        EDIT_TEMPLATE,
         item=item,
         categories=categories,
-        language=get_language()
+        lang=lang, direction=html_direction(lang), t=lambda key: tr(key, lang), category_label=category_label, unit_label=unit_label
     )
 
 
@@ -2538,8 +2459,6 @@ def download_pdf():
             text = "" if value is None else str(value)
             # Shape Arabic/Kurdish joining forms first, then apply
             # the Unicode bidirectional algorithm for visual RTL order.
-            if not rtl:
-                return xml_escape(text)
             shaped = arabic_reshaper.reshape(text)
             visual = get_display(shaped, base_dir="R")
             return xml_escape(visual)
@@ -2549,8 +2468,25 @@ def download_pdf():
         note = get_note(device_id)
         location, phone = get_company_info()
         lang = get_language()
-        rtl = lang in ("ku", "ar")
-        L = LANG_TEXT.get(lang, LANG_TEXT["ku"])
+
+        # PDF labels follow the language selected in Settings.
+        pdf_labels = {
+            "ku": {
+                "qayma": "قایمە", "location": "شوێن", "phone": "مۆبایل", "date": "بەروار",
+                "note": "تێبینی", "factory": "مواد معمل", "warehouse": "مواد مخزن", "fiqi": "فێقی",
+                "qty": "عدد", "item": "ماددە", "unit": "وحدە", "total": "کۆی بابەتەکان",
+            },
+            "ar": {
+                "qayma": "القائمة", "location": "الموقع", "phone": "الهاتف", "date": "التاريخ",
+                "note": "ملاحظة", "factory": "مواد معمل", "warehouse": "مواد مخزن", "fiqi": "فێقی",
+                "qty": "العدد", "item": "المادة", "unit": "الوحدة", "total": "إجمالي المواد",
+            },
+            "en": {
+                "qayma": "Qayma", "location": "Location", "phone": "Phone", "date": "Date",
+                "note": "Note", "factory": "Factory Materials", "warehouse": "Warehouse Materials", "fiqi": "Fêqî",
+                "qty": "Quantity", "item": "Item", "unit": "Unit", "total": "Total Items",
+            },
+        }[lang]
 
         # -----------------------------------------------------
         # AMIRI FONT - required for all PDF text
@@ -2733,12 +2669,7 @@ def download_pdf():
                 "box": "بۆکس",
                 "لبان": "دانە",
             }
-            key = mapping.get(u, str(unit or ""))
-            if lang == "en":
-                return {"قطعة":"Piece","كێلو":"Kilo","كغم":"Kilo","كارتۆن":"Carton","لتر":"Liter","بۆکس":"Box","دانە":"Piece"}.get(key, key)
-            if lang == "ar":
-                return {"قطعة":"قطعة","كێلو":"كغم","كغم":"كغم","كارتۆن":"كرتون","لتر":"لتر","بۆکس":"علبة","دانە":"قطعة"}.get(key, key)
-            return {"قطعة":"دانە","كێلو":"کیلۆ","كغم":"کیلۆ","كارتۆن":"کارتۆن","لتر":"لیتر","بۆکس":"بۆکس","دانە":"دانە"}.get(key, key)
+            return mapping.get(u, str(unit or ""))
 
         def fmt_qty(value):
             try:
@@ -2771,9 +2702,9 @@ def download_pdf():
 
         brand_block = [
             Paragraph(pdf_text("ORGANIC JUICES"), brand_style),
-            Paragraph(pdf_text("100% Natural"), subtitle_style),
+            Paragraph(pdf_text(tr("natural", lang)), subtitle_style),
             Spacer(1, 2),
-            Paragraph(pdf_text(L["qayma"]), title_style),
+            Paragraph(pdf_text(pdf_labels["qayma"]), title_style),
         ]
         header = Table(
             [[logo_cell, brand_block, ""]],
@@ -2794,10 +2725,10 @@ def download_pdf():
         story.append(Spacer(1, 4))
 
         info_data = [[
-            Paragraph(pdf_text(L["location"] + ": " + str(location)), info_style),
-            Paragraph(pdf_text(L["phone"] + ": " + str(phone)), info_style),
+            Paragraph(pdf_text(pdf_labels["location"] + ": " + str(location)), info_style),
+            Paragraph(pdf_text(pdf_labels["phone"] + ": " + str(phone)), info_style),
             Paragraph(
-                pdf_text(L["date"] + ": " + datetime.now().strftime("%Y / %m / %d")),
+                pdf_text(pdf_labels["date"] + ": " + datetime.now().strftime("%Y / %m / %d")),
                 info_style,
             ),
         ]]
@@ -2817,15 +2748,15 @@ def download_pdf():
 
         if note:
             story.append(Spacer(1, 3))
-            story.append(Paragraph(pdf_text(L["note"] + ": " + str(note)), note_style))
+            story.append(Paragraph(pdf_text(pdf_labels["note"] + ": " + str(note)), note_style))
 
         story.append(Spacer(1, 5))
 
         # Only non-empty categories are included in the Qayma.
         category_specs = [
-            ("مواد معمل" if lang == "ar" else "Factory Materials" if lang == "en" else "مواد معمل", "مەعمەل"),
-            ("مواد مخزن" if lang == "ar" else "Warehouse Materials" if lang == "en" else "مواد مخزن", "مەغزەن"),
-            ("الفواكه" if lang == "ar" else "Fruits" if lang == "en" else "فێقی", "فێقی"),
+            (pdf_labels["factory"], "مەعمەل"),
+            (pdf_labels["warehouse"], "مەغزەن"),
+            (pdf_labels["fiqi"], "فێقی"),
         ]
         non_empty = [
             (title, key, grouped.get(key, []))
@@ -2844,9 +2775,9 @@ def download_pdf():
 
             for title, key, rows in non_empty:
                 data = [[
-                    Paragraph(pdf_text(L["qty"]), head_style),
-                    Paragraph(pdf_text(L["material"]), head_style),
-                    Paragraph(pdf_text(L["unit_header"]), head_style),
+                    Paragraph(pdf_text(pdf_labels["qty"]), head_style),
+                    Paragraph(pdf_text(pdf_labels["item"]), head_style),
+                    Paragraph(pdf_text(pdf_labels["unit"]), head_style),
                 ]]
 
                 for row in rows:
@@ -2904,14 +2835,14 @@ def download_pdf():
             # Keep the invoice tables and their summary together so the
             # layout does not scatter across pages.
             summary = Paragraph(
-                pdf_text(L["total"] + ": " + str(len(orders))),
+                pdf_text(pdf_labels["total"] + ": " + str(len(orders))),
                 footer_style,
             )
             story.append(KeepTogether([category_row, Spacer(1, 3), summary]))
         else:
             story.append(
                 Paragraph(
-                    pdf_text(L["total"] + ": " + str(len(orders))),
+                    pdf_text(pdf_labels["total"] + ": " + str(len(orders))),
                     footer_style,
                 )
             )
